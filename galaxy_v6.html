@@ -26,6 +26,28 @@
         width: 100%;
       }
 
+      /* Animation de fond étoiles */
+      .starfield {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: black;
+        overflow: hidden;
+        z-index: -1;
+      }
+
+      .star {
+        position: absolute;
+        width: 2px;
+        height: 2px;
+        background: white;
+        border-radius: 50%;
+        opacity: 0.8;
+      }
+
+      /* Écran titre */
       .title-screen {
         display: flex;
         flex-direction: column;
@@ -34,12 +56,13 @@
         height: 100%;
         background: radial-gradient(circle at 50% 30%, #0a0a1a, #000);
         text-align: center;
+        color: #e0e0ff;
       }
 
       .game-title {
         font-size: 3rem;
         color: #72d6ff;
-        text-shadow: 0 0 10px #00aaff;
+        text-shadow: 0 0 20px #00aaff;
         margin-bottom: 1rem;
       }
 
@@ -78,12 +101,98 @@
       }
 
       .fade-in {
-        animation: fadeIn 2s ease forwards;
+        animation: fadeIn 1.5s ease forwards;
       }
 
       @keyframes fadeIn {
         from { opacity: 0; transform: scale(0.95); }
         to { opacity: 1; transform: scale(1); }
+      }
+
+      /* HUD + panneaux jeu */
+      .hud {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        display: flex;
+        justify-content: space-around;
+        background: rgba(0,0,0,0.6);
+        padding: 8px;
+        font-size: 14px;
+      }
+
+      .hud div {
+        cursor: default;
+      }
+
+      .panel {
+        position: absolute;
+        top: 40px;
+        left: 0;
+        bottom: 0;
+        width: 260px;
+        background: rgba(10,10,15,0.85);
+        overflow-y: auto;
+        padding: 10px;
+        color: #ccc;
+      }
+
+      .panel h3 {
+        color: #72d6ff;
+        text-shadow: 0 0 8px #00aaff;
+      }
+
+      .tooltip {
+        display: inline-block;
+        background: #222;
+        color: #fff;
+        border: 1px solid #555;
+        border-radius: 6px;
+        padding: 4px 6px;
+        font-size: 12px;
+        margin-left: 4px;
+      }
+
+      button.upgrade-btn {
+        margin-top: 4px;
+        width: 100%;
+        border: none;
+        color: white;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: bold;
+        padding: 5px;
+      }
+
+      .disabled-btn {
+        background: #444;
+        cursor: not-allowed;
+      }
+
+      .enabled-btn {
+        background: #0a84ff;
+      }
+
+      svg.galaxy-map {
+        width: 100%;
+        height: 100%;
+        background: black;
+      }
+
+      .event-box {
+        position: absolute;
+        right: 20px;
+        bottom: 20px;
+        background: rgba(10,10,15,0.9);
+        border: 1px solid #00aaff;
+        border-radius: 10px;
+        padding: 10px 15px;
+        max-width: 280px;
+        color: #b0e0ff;
+        font-size: 14px;
+        box-shadow: 0 0 10px #0090ff;
+        animation: fadeIn 0.5s ease;
       }
     </style>
   </head>
@@ -92,81 +201,15 @@
     <div id="root"></div>
 
     <script type="text/babel">
-
+      /* ==========================
+         Données de base du jeu
+      =========================== */
       const races = [
         { id: "human", name: "Humains", desc: "Équilibrés, bons bâtisseurs." },
         { id: "cyborg", name: "Cyborgs", desc: "Industrie et efficacité." },
         { id: "xeno", name: "Xenos", desc: "Expansion rapide, mais instables." },
         { id: "ai", name: "IA Centrale", desc: "Science et contrôle total." },
       ];
-
-      function TitleScreen({ onStart }) {
-        const [pseudo, setPseudo] = React.useState(localStorage.getItem("playerPseudo") || "");
-        const [race, setRace] = React.useState(localStorage.getItem("playerRace") || "human");
-
-        const handleStart = () => {
-          if (!pseudo.trim()) return alert("Entre un pseudo !");
-          localStorage.setItem("playerPseudo", pseudo);
-          localStorage.setItem("playerRace", race);
-          onStart({ pseudo, race });
-        };
-
-        return (
-          <div className="title-screen fade-in">
-            <div className="game-title">🌌 Galactic Dominion V6 🌌</div>
-            <div className="subtitle">Version prototype - Démo locale</div>
-
-            <div>
-              <input
-                type="text"
-                placeholder="Ton pseudo..."
-                value={pseudo}
-                onChange={(e) => setPseudo(e.target.value)}
-              />
-            </div>
-
-            <div>
-              <select value={race} onChange={(e) => setRace(e.target.value)}>
-                {races.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name} — {r.desc}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <button className="start-btn" onClick={handleStart}>
-              Commencer la conquête
-            </button>
-
-            {localStorage.getItem("playerState") && (
-              <button
-                onClick={() => onStart({
-                  pseudo: localStorage.getItem("playerPseudo"),
-                  race: localStorage.getItem("playerRace")
-                })}
-              >
-                Continuer
-              </button>
-            )}
-          </div>
-        );
-      }
-
-      function App() {
-        const [started, setStarted] = React.useState(false);
-
-        return (
-          <>
-            {!started && <TitleScreen onStart={() => setStarted(true)} />}
-            {started && <div style={{textAlign:"center",marginTop:"20%",color:"#fff"}}>
-              <h2>Chargement de la galaxie...</h2>
-              <p>La carte et le moteur du jeu seront ajoutés ici (Bloc 2).</p>
-            </div>}
-          </>
-        );
-      }
-      // === Bloc 2 : Moteur de jeu principal ===
 
       const BASE_BUILDINGS = {
         mine: { name: "Mine", baseProd: 10, baseCost: 100, desc: "Produit des minéraux." },
@@ -175,158 +218,59 @@
         lab: { name: "Laboratoire", baseProd: 2, baseCost: 150, desc: "Produit de la science." },
       };
 
-      function GameHUD({ resources, onTick, onUpgrade }) {
-        return (
-          <div style={{
-            position: "absolute", top: 0, left: 0, right: 0,
-            background: "rgba(0,0,0,0.6)", display: "flex",
-            justifyContent: "space-around", padding: "8px", fontSize: "14px"
-          }}>
-            {Object.keys(resources).map((r) => (
-              <div key={r} title={`Quantité de ${r}`}>
-                {r.toUpperCase()}: {Math.floor(resources[r])}
-              </div>
-            ))}
-          </div>
-        );
-      }
+      /* ==========================
+         Composant écran titre
+      =========================== */
+      function TitleScreen({ onStart }) {
+        const [pseudo, setPseudo] = React.useState(localStorage.getItem("playerPseudo") || "");
+        const [race, setRace] = React.useState(localStorage.getItem("playerRace") || "human");
 
-      function Tooltip({ text }) {
-        return (
-          <span style={{
-            display: "inline-block",
-            background: "#222",
-            color: "#fff",
-            border: "1px solid #555",
-            borderRadius: "6px",
-            padding: "4px 6px",
-            fontSize: "12px",
-            marginLeft: "4px"
-          }}>
-            {text}
-          </span>
-        );
-      }
-
-      function BuildingPanel({ buildings, onUpgrade, resources }) {
-        return (
-          <div style={{
-            position: "absolute", left: 0, bottom: 0, top: "40px",
-            width: "240px", background: "rgba(10,10,15,0.85)",
-            overflowY: "auto", padding: "10px"
-          }}>
-            <h3>🛠️ Bâtiments</h3>
-            {Object.entries(buildings).map(([key, b]) => {
-              const data = BASE_BUILDINGS[key];
-              const nextCost = data.baseCost * Math.pow(1.5, b.level);
-              const canAfford = resources.mineral >= nextCost;
-              return (
-                <div key={key} style={{ marginBottom: "10px" }}>
-                  <strong>{data.name}</strong> <Tooltip text={data.desc} />
-                  <div>Niveau : {b.level}</div>
-                  <div>Production : +{Math.round(data.baseProd * b.level)}/tick</div>
-                  <button
-                    disabled={!canAfford}
-                    onClick={() => onUpgrade(key, nextCost)}
-                    style={{
-                      marginTop: "4px",
-                      width: "100%",
-                      background: canAfford ? "#0a84ff" : "#444",
-                      border: "none",
-                      color: "white",
-                      borderRadius: "6px",
-                      cursor: canAfford ? "pointer" : "not-allowed"
-                    }}
-                  >
-                    Améliorer (💎 {Math.round(nextCost)})
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        );
-      }
-
-      function GalaxyMap() {
-        const stars = Array.from({ length: 30 }, (_, i) => ({
-          x: Math.random() * 100,
-          y: Math.random() * 100,
-          name: "S-" + (i + 1),
-        }));
-        return (
-          <svg width="100%" height="100%" style={{ background: "black" }}>
-            {stars.map((s, i) => (
-              <circle
-                key={i}
-                cx={s.x + "%"}
-                cy={s.y + "%"}
-                r="2"
-                fill="#72d6ff"
-                opacity="0.8"
-              >
-                <title>{s.name}</title>
-              </circle>
-            ))}
-          </svg>
-        );
-      }
-
-      function GameMain() {
-        const [resources, setResources] = React.useState({
-          mineral: 500,
-          energy: 300,
-          crystal: 100,
-          science: 0,
-        });
-        const [buildings, setBuildings] = React.useState({
-          mine: { level: 1 },
-          power: { level: 1 },
-          extractor: { level: 1 },
-          lab: { level: 1 },
-        });
-        const tickTime = 3000;
-
-        React.useEffect(() => {
-          const timer = setInterval(() => {
-            // Production par tick
-            setResources((r) => {
-              const gain = {
-                mineral: r.mineral + BASE_BUILDINGS.mine.baseProd * buildings.mine.level,
-                energy: r.energy + BASE_BUILDINGS.power.baseProd * buildings.power.level,
-                crystal: r.crystal + BASE_BUILDINGS.extractor.baseProd * buildings.extractor.level,
-                science: r.science + BASE_BUILDINGS.lab.baseProd * buildings.lab.level,
-              };
-              localStorage.setItem("playerState", JSON.stringify({ resources: gain, buildings }));
-              return gain;
-            });
-          }, tickTime);
-          return () => clearInterval(timer);
-        }, [buildings]);
-
-        const upgradeBuilding = (key, cost) => {
-          setResources((r) => ({ ...r, mineral: r.mineral - cost }));
-          setBuildings((b) => ({
-            ...b,
-            [key]: { level: b[key].level + 1 },
-          }));
+        const handleStart = () => {
+          if (!pseudo.trim()) {
+            alert("Entre un pseudo !");
+            return;
+          }
+          localStorage.setItem("playerPseudo", pseudo);
+          localStorage.setItem("playerRace", race);
+          onStart({ pseudo, race });
         };
 
         return (
-          <div style={{ height: "100%", width: "100%", position: "relative" }}>
-            <GalaxyMap />
-            <GameHUD resources={resources} />
-            <BuildingPanel
-              buildings={buildings}
-              onUpgrade={upgradeBuilding}
-              resources={resources}
+          <div className="title-screen fade-in">
+            <div className="game-title">🌌 Galactic Dominion V6 🌌</div>
+            <div className="subtitle">Prototype solo local</div>
+
+            <input
+              type="text"
+              placeholder="Ton pseudo..."
+              value={pseudo}
+              onChange={(e) => setPseudo(e.target.value)}
             />
+
+            <select value={race} onChange={(e) => setRace(e.target.value)}>
+              {races.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name} — {r.desc}
+                </option>
+              ))}
+            </select>
+
+            <button className="start-btn" onClick={handleStart}>
+              Commencer la conquête
+            </button>
+
+            {localStorage.getItem("playerState") && (
+              <button
+                onClick={() =>
+                  onStart({
+                    pseudo: localStorage.getItem("playerPseudo"),
+                    race: localStorage.getItem("playerRace"),
+                  })
+                }
+              >
+                Continuer
+              </button>
+            )}
           </div>
         );
       }
-
-      // === Fin du bloc 2 ===
-
-      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
-    </script>
-  </body>
-</html>
