@@ -481,3 +481,434 @@
   </body>
 </html>
 
+      /* ==========================
+         IA neutre et événements
+      =========================== */
+      function useAICivilizations(stars, setStars, pushEvent) {
+        // Crée quelques IA aléatoires
+        const [ais] = React.useState(() => {
+          return Array.from({ length: 3 }, (_, i) => ({
+            id: "AI_" + i,
+            name: "Civilisation " + (i + 1),
+            color: ["#ff5555", "#55ff55", "#ffaa00"][i % 3],
+            expansion: 1,
+          }));
+        });
+
+        // Chaque 5s, les IA étendent leur influence
+        React.useEffect(() => {
+          const timer = setInterval(() => {
+            setStars((oldStars) => {
+              const newStars = [...oldStars];
+              ais.forEach((ai) => {
+                // Choisit une étoile libre aléatoire
+                const freeStars = newStars.filter((s) => !s.owner);
+                if (freeStars.length === 0) return;
+                const target =
+                  freeStars[Math.floor(Math.random() * freeStars.length)];
+                if (Math.random() < 0.4) {
+                  target.owner = ai.name;
+                  pushEvent(ai.name + " a colonisé " + target.name);
+                }
+              });
+              return newStars;
+            });
+          }, 5000);
+          return () => clearInterval(timer);
+        }, []);
+      }
+
+      /* ==========================
+         Gestion des événements aléatoires
+      =========================== */
+      function useRandomEvents(setResources, pushEvent) {
+        React.useEffect(() => {
+          const timer = setInterval(() => {
+            const roll = Math.random();
+            if (roll < 0.2) {
+              const bonus = Math.floor(Math.random() * 100) + 50;
+              pushEvent("🚀 Découverte d'un gisement de minerai ! +" + bonus);
+              setResources((r) => ({ ...r, minerai: r.minerai + bonus }));
+            } else if (roll < 0.3) {
+              const penalty = Math.floor(Math.random() * 40);
+              pushEvent("☄️ Impact de météorites ! -" + penalty + " énergie");
+              setResources((r) => ({
+                ...r,
+                energie: Math.max(0, r.energie - penalty),
+              }));
+            } else if (roll < 0.35) {
+              pushEvent("📡 Contact avec une espèce inconnue : gain de science !");
+              setResources((r) => ({ ...r, science: r.science + 25 }));
+            }
+          }, 8000);
+          return () => clearInterval(timer);
+        }, []);
+      }
+
+      /* ==========================
+         Vaisseaux animés (décor)
+      =========================== */
+      function useShipsAnimation(stars) {
+        const [ships, setShips] = React.useState([]);
+
+        React.useEffect(() => {
+          // Crée quelques vaisseaux au hasard
+          const newShips = Array.from({ length: 8 }, () => ({
+            id: Math.random(),
+            x: Math.random() * 1000,
+            y: Math.random() * 800,
+            dx: Math.random() * 1 - 0.5,
+            dy: Math.random() * 1 - 0.5,
+          }));
+          setShips(newShips);
+
+          const timer = setInterval(() => {
+            setShips((prev) =>
+              prev.map((s) => {
+                let nx = s.x + s.dx;
+                let ny = s.y + s.dy;
+                if (nx < 0 || nx > 1000) s.dx *= -1;
+                if (ny < 0 || ny > 800) s.dy *= -1;
+                return { ...s, x: nx, y: ny };
+              })
+            );
+          }, 100);
+          return () => clearInterval(timer);
+        }, []);
+
+        return ships;
+      }
+
+      /* ==========================
+         Carte améliorée avec IA + vaisseaux
+      =========================== */
+      function GalaxyMapV2({ stars, onSelectStar, ships }) {
+        return (
+          <svg
+            className="galaxy-map"
+            viewBox="0 0 1000 800"
+            onClick={(e) => {
+              if (e.target.tagName === "circle") return;
+              onSelectStar(null);
+            }}
+          >
+            <rect width="100%" height="100%" fill="black" />
+            {stars.map((s) => (
+              <circle
+                key={s.id}
+                cx={s.x}
+                cy={s.y}
+                r="4"
+                fill={
+                  s.owner
+                    ? s.owner.includes("Civilisation")
+                      ? "#ff3333"
+                      : "#00aaff"
+                    : "#ffffff"
+                }
+                onClick={() => onSelectStar(s)}
+              />
+            ))}
+            {ships.map((ship) => (
+              <circle
+                key={ship.id}
+                cx={ship.x}
+                cy={ship.y}
+                r="1.5"
+                fill="#00ffff"
+                opacity="0.7"
+              />
+            ))}
+          </svg>
+        );
+      }
+
+      /* ==========================
+         Game amélioré (IA + events)
+      =========================== */
+      function GameV2({ player }) {
+        const [stars, setStars] = React.useState(generateGalaxy());
+        const [selectedStar, setSelectedStar] = React.useState(null);
+        const [resources, setResources] = React.useState({
+          minerai: 200,
+          energie: 100,
+          cristal: 50,
+          science: 0,
+        });
+        const [buildings, setBuildings] = React.useState({
+          mine: 0,
+          power: 0,
+          extractor: 0,
+          lab: 0,
+        });
+        const [events, setEvents] = React.useState([]);
+
+        const pushEvent = (msg) => {
+          const id = Date.now();
+          setEvents((ev) => [...ev, { id, msg }]);
+          // auto suppression
+          setTimeout(() => {
+            setEvents((ev) => ev.filter((e) => e.id !== id));
+          }, 6000);
+        };
+
+        const handleBuild = (type, cost) => {
+          setResources((r) => ({ ...r, minerai: r.minerai - cost }));
+          setBuildings((b) => ({
+            ...b,
+            [type]: b[type] + 1,
+          }));
+          pushEvent("🏗️ Construction : " + BASE_BUILDINGS[type].name);
+        };
+
+        // Production automatique
+        React.useEffect(() => {
+          const timer = setInterval(() => {
+            setResources((r) => {
+              const prod = {
+                minerai: buildings.mine * BASE_BUILDINGS.mine.baseProd,
+                energie: buildings.power * BASE_BUILDINGS.power.baseProd,
+                cristal: buildings.extractor * BASE_BUILDINGS.extractor.baseProd,
+                science: buildings.lab * BASE_BUILDINGS.lab.baseProd,
+              };
+              return {
+                minerai: r.minerai + prod.minerai * 0.5,
+                energie: r.energie + prod.energie * 0.5,
+                cristal: r.cristal + prod.cristal * 0.5,
+                science: r.science + prod.science * 0.5,
+              };
+            });
+          }, 1000);
+          return () => clearInterval(timer);
+        }, [buildings]);
+
+        // IA et événements
+        useAICivilizations(stars, setStars, pushEvent);
+        useRandomEvents(setResources, pushEvent);
+        const ships = useShipsAnimation(stars);
+
+        return (
+          <>
+            <HUD resources={resources} />
+            <PlanetPanel
+              selectedStar={selectedStar}
+              buildings={buildings}
+              resources={resources}
+              onBuild={handleBuild}
+            />
+            <GalaxyMapV2 stars={stars} onSelectStar={setSelectedStar} ships={ships} />
+
+            {events.map((e) => (
+              <div key={e.id} className="event-box">
+                {e.msg}
+              </div>
+            ))}
+          </>
+        );
+      }
+
+      /* ==========================
+         App finale (utilise GameV2)
+      =========================== */
+      function AppV2() {
+        const [started, setStarted] = React.useState(false);
+        const [player, setPlayer] = React.useState(null);
+
+        const handleStart = (playerData) => {
+          setPlayer(playerData);
+          setStarted(true);
+        };
+
+        return (
+          <>
+            {!started && <TitleScreen onStart={handleStart} />}
+            {started && <GameV2 player={player} />}
+          </>
+        );
+      }
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<AppV2 />);
+
+              /* ==========================
+         Missions dynamiques
+      =========================== */
+      function useMissions(pushEvent, setResources, setExp) {
+        React.useEffect(() => {
+          const timer = setInterval(() => {
+            const roll = Math.random();
+            if (roll < 0.25) {
+              pushEvent("🛰️ Mission d'exploration lancée...");
+              setTimeout(() => {
+                const reward = Math.floor(Math.random() * 200 + 100);
+                pushEvent("🌍 Découverte de ruines anciennes ! +" + reward + " minerais");
+                setResources((r) => ({ ...r, minerai: r.minerai + reward }));
+                setExp((x) => x + 10);
+              }, 5000);
+            } else if (roll < 0.35) {
+              pushEvent("🤝 Mission commerciale réussie !");
+              const bonus = Math.floor(Math.random() * 100 + 50);
+              setResources((r) => ({ ...r, cristal: r.cristal + bonus }));
+              setExp((x) => x + 5);
+            } else if (roll < 0.4) {
+              pushEvent("⚔️ Conflit spatial détecté, pertes mineures...");
+              setResources((r) => ({
+                ...r,
+                energie: Math.max(0, r.energie - 50),
+              }));
+              setExp((x) => x + 15);
+            }
+          }, 12000);
+          return () => clearInterval(timer);
+        }, []);
+      }
+
+      /* ==========================
+         Sauvegarde + progression
+      =========================== */
+      function useSaveSystem(resources, buildings, level, exp) {
+        React.useEffect(() => {
+          const data = { resources, buildings, level, exp };
+          localStorage.setItem("gd_save_v6", JSON.stringify(data));
+        }, [resources, buildings, level, exp]);
+      }
+
+      function loadSave() {
+        try {
+          return JSON.parse(localStorage.getItem("gd_save_v6")) || null;
+        } catch {
+          return null;
+        }
+      }
+
+      /* ==========================
+         HUD amélioré (XP + niveau)
+      =========================== */
+      function HUDV2({ resources, exp, level }) {
+        return (
+          <div className="hud">
+            <div>⛏️ Minerai : {Math.floor(resources.minerai)}</div>
+            <div>⚡ Énergie : {Math.floor(resources.energie)}</div>
+            <div>💎 Cristal : {Math.floor(resources.cristal)}</div>
+            <div>🧪 Science : {Math.floor(resources.science)}</div>
+            <div>⭐ Niveau : {level}</div>
+            <div>📊 XP : {exp}</div>
+          </div>
+        );
+      }
+
+      /* ==========================
+         Jeu final avec missions + XP
+      =========================== */
+      function GameV3({ player }) {
+        const save = loadSave();
+        const [stars, setStars] = React.useState(generateGalaxy());
+        const [selectedStar, setSelectedStar] = React.useState(null);
+        const [resources, setResources] = React.useState(
+          save?.resources || { minerai: 200, energie: 100, cristal: 50, science: 0 }
+        );
+        const [buildings, setBuildings] = React.useState(
+          save?.buildings || { mine: 0, power: 0, extractor: 0, lab: 0 }
+        );
+        const [events, setEvents] = React.useState([]);
+        const [exp, setExp] = React.useState(save?.exp || 0);
+        const [level, setLevel] = React.useState(save?.level || 1);
+
+        const pushEvent = (msg) => {
+          const id = Date.now();
+          setEvents((ev) => [...ev, { id, msg }]);
+          setTimeout(() => {
+            setEvents((ev) => ev.filter((e) => e.id !== id));
+          }, 6000);
+        };
+
+        const handleBuild = (type, cost) => {
+          setResources((r) => ({ ...r, minerai: r.minerai - cost }));
+          setBuildings((b) => ({
+            ...b,
+            [type]: b[type] + 1,
+          }));
+          setExp((x) => x + 3);
+          pushEvent("🏗️ Construction : " + BASE_BUILDINGS[type].name);
+        };
+
+        // Production continue
+        React.useEffect(() => {
+          const timer = setInterval(() => {
+            setResources((r) => {
+              const prod = {
+                minerai: buildings.mine * BASE_BUILDINGS.mine.baseProd,
+                energie: buildings.power * BASE_BUILDINGS.power.baseProd,
+                cristal: buildings.extractor * BASE_BUILDINGS.extractor.baseProd,
+                science: buildings.lab * BASE_BUILDINGS.lab.baseProd,
+              };
+              return {
+                minerai: r.minerai + prod.minerai * 0.5,
+                energie: r.energie + prod.energie * 0.5,
+                cristal: r.cristal + prod.cristal * 0.5,
+                science: r.science + prod.science * 0.5,
+              };
+            });
+          }, 1000);
+          return () => clearInterval(timer);
+        }, [buildings]);
+
+        // Level-up système
+        React.useEffect(() => {
+          if (exp > level * 50) {
+            setLevel((l) => l + 1);
+            setExp(0);
+            pushEvent("🌟 Nouveau niveau atteint !");
+          }
+        }, [exp]);
+
+        // IA, events, missions
+        useAICivilizations(stars, setStars, pushEvent);
+        useRandomEvents(setResources, pushEvent);
+        const ships = useShipsAnimation(stars);
+        useMissions(pushEvent, setResources, setExp);
+        useSaveSystem(resources, buildings, level, exp);
+
+        return (
+          <>
+            <HUDV2 resources={resources} exp={exp} level={level} />
+            <PlanetPanel
+              selectedStar={selectedStar}
+              buildings={buildings}
+              resources={resources}
+              onBuild={handleBuild}
+            />
+            <GalaxyMapV2 stars={stars} onSelectStar={setSelectedStar} ships={ships} />
+
+            {events.map((e) => (
+              <div key={e.id} className="event-box">
+                {e.msg}
+              </div>
+            ))}
+          </>
+        );
+      }
+
+      /* ==========================
+         App finale avec GameV3
+      =========================== */
+      function AppFinal() {
+        const [started, setStarted] = React.useState(false);
+        const [player, setPlayer] = React.useState(null);
+
+        const handleStart = (playerData) => {
+          setPlayer(playerData);
+          setStarted(true);
+        };
+
+        return (
+          <>
+            {!started && <TitleScreen onStart={handleStart} />}
+            {started && <GameV3 player={player} />}
+          </>
+        );
+      }
+
+      // Lancement final
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<AppFinal />);
