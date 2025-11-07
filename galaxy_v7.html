@@ -1,938 +1,217 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Galaxie Vivante V7 — Conscience Cosmique</title>
-  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>🌌 La Galaxie Vivante — V7</title>
+
+  <!-- React + Babel -->
+  <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/framer-motion@10.16.4/dist/framer-motion.umd.js"></script>
-  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
   <style>
-    html, body {
-      margin: 0; padding: 0;
-      background: radial-gradient(ellipse at center, #000010 0%, #000000 100%);
+    html,body {
+      margin: 0;
+      height: 100%;
+      background: radial-gradient(ellipse at bottom, #05071a 0%, #000 100%);
+      color: #e6f0ff;
+      font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto;
       overflow: hidden;
-      color: white;
-      font-family: 'Segoe UI', sans-serif;
-      height: 100vh;
-      width: 100vw;
     }
-    canvas {
-      position: absolute;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      z-index: 0;
-    }
+    .star { transition: transform 0.12s, box-shadow 0.12s; cursor: pointer; }
+    .star:hover { transform: scale(1.25); }
+    .notif { animation: pop .3s ease-out; }
+    @keyframes pop { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
     .hud {
-      position: absolute;
-      bottom: 10px;
-      left: 10px;
       background: rgba(0,0,0,0.6);
-      padding: 8px;
       border-radius: 8px;
-      font-size: 12px;
-    }
-    .music-btn {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      background: rgba(0,0,0,0.5);
-      border: none;
-      color: white;
       padding: 6px 10px;
-      border-radius: 8px;
-      cursor: pointer;
-    }
-    .star-name {
-      font-size: 11px;
-      color: #ddd;
-      position: absolute;
-      transform: translate(-50%, -50%);
-      white-space: nowrap;
-      pointer-events: none;
+      font-size: 0.9rem;
+      display: flex;
+      gap: 1rem;
     }
   </style>
 </head>
-
 <body>
   <div id="root"></div>
 
   <script type="text/babel">
-
   const { useState, useEffect, useRef } = React;
 
-  // ====== Données initiales ======
-  const STAR_COUNT = 200;
-  const GALAXY_SIZE = 5000;
+  /* ============================================================
+     GÉNÉRATION DE LA GALAXIE
+  ============================================================ */
+  const WORLD = { SIZE: 3200, STAR_COUNT: 28 };
+  const rand = (a,b)=>Math.random()*(b-a)+a;
+  const randint = (a,b)=>Math.floor(rand(a,b+1));
 
-  // Génère des étoiles vivantes
-  function generateStars() {
-    const stars = [];
-    for (let i = 0; i < STAR_COUNT; i++) {
-      stars.push({
-        id: i,
-        name: "Étoile " + (i + 1),
-        x: Math.random() * GALAXY_SIZE,
-        y: Math.random() * GALAXY_SIZE,
-        age: Math.random() * 10000,
-        brightness: Math.random() * 0.8 + 0.2,
-        color: ["#88f", "#ffb", "#f88", "#8ff"][Math.floor(Math.random() * 4)],
-        alive: true,
-      });
-    }
-    return stars;
+  const syll = ["zor","kan","vel","tor","lin","rax","mer","ion","tal","quor","xen","phi","lun","dra","ora","esh","nar","sol","vak"];
+  const randomName = ()=>syll[randint(0,syll.length-1)] + syll[randint(0,syll.length-1)] + "-" + randint(1,999);
+
+  const generateStar = () => ({
+    id: crypto.randomUUID(),
+    name: randomName(),
+    x: rand(100, WORLD.SIZE-100),
+    y: rand(100, WORLD.SIZE-100),
+    population: randint(10000, 5000000),
+    civLevel: randint(0,4),
+    energy: randint(50,500),
+    alignment: ["pacifique","conquérant","scientifique","nomade"][randint(0,3)],
+    status: "stable",
+    owner: null,
+    resources: { minerai: randint(50,200), cristal: randint(20,100), science: 0 },
+    buildings: { mine: 0, power: 0, lab: 0 },
+  });
+
+  const createGalaxy = () => Array.from({length: WORLD.STAR_COUNT}, generateStar);
+
+  /* ============================================================
+     COMPOSANTS DE BASE
+  ============================================================ */
+  function HUD({ resources }) {
+    return (
+      <div className="hud absolute top-3 left-3 z-50">
+        <div>⛏️ Minerai: {Math.floor(resources.minerai)}</div>
+        <div>⚡ Énergie: {Math.floor(resources.energie)}</div>
+        <div>💎 Cristal: {Math.floor(resources.cristal)}</div>
+        <div>🧪 Science: {Math.floor(resources.science)}</div>
+      </div>
+    );
   }
 
-  // ====== Composant principal ======
-  function App() {
-    const canvasRef = useRef(null);
-    const [stars, setStars] = useState(generateStars());
-    const [offset, setOffset] = useState({ x: -GALAXY_SIZE/2 + window.innerWidth/2, y: -GALAXY_SIZE/2 + window.innerHeight/2 });
-    const [scale, setScale] = useState(1);
-    const [selectedStar, setSelectedStar] = useState(null);
-    const [musicOn, setMusicOn] = useState(false);
-    const audioRef = useRef(null);
+  function StarMap({ galaxy, onSelect, camera, setCamera }) {
+    const ref = useRef(null);
+    const dragging = useRef(false);
+    const last = useRef({x:0,y:0});
 
-    // Gérer le déplacement / zoom
-    useEffect(() => {
-      const canvas = canvasRef.current;
-      const ctx = canvas.getContext("2d");
-      let dragging = false;
-      let lastX, lastY;
+    const onDown = (e)=>{dragging.current=true; last.current={x:e.clientX,y:e.clientY};};
+    const onMove = (e)=>{ if(!dragging.current)return; const dx=e.clientX-last.current.x; const dy=e.clientY-last.current.y; last.current={x:e.clientX,y:e.clientY}; setCamera(c=>({...c,x:c.x+dx,y:c.y+dy})); };
+    const onUp = ()=>dragging.current=false;
 
-      function draw() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        stars.forEach(s => {
-          if (!s.alive) return;
-          const x = (s.x + offset.x) * scale;
-          const y = (s.y + offset.y) * scale;
-          const size = s.brightness * 2.5 * scale;
-          ctx.beginPath();
-          ctx.fillStyle = s.color;
-          ctx.globalAlpha = s.brightness;
-          ctx.arc(x, y, size, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.globalAlpha = 1;
-        });
-      }
+    const transform=`translate(${camera.x}px,${camera.y}px) scale(${camera.scale})`;
 
-      let anim;
-      function loop() {
-        anim = requestAnimationFrame(loop);
-        draw();
-      }
-      loop();
+    return (
+      <div ref={ref} onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp}
+           className="absolute inset-0" style={{touchAction:"none"}}>
+        <div style={{
+          position:"absolute", left:(window.innerWidth-WORLD.SIZE)/2, top:(window.innerHeight-WORLD.SIZE)/2,
+          width:WORLD.SIZE, height:WORLD.SIZE, transform, transformOrigin:"0 0"
+        }}>
+          {galaxy.map(s=>{
+            const size = 6 + Math.log10(s.population)/1.2;
+            const color = s.status==="collapsed" ? "#555" :
+              s.alignment==="pacifique"?"#6ee7b7":s.alignment==="scientifique"?"#9f9fff":s.alignment==="nomade"?"#ffd86b":"#ff9f6b";
+            return (
+              <div key={s.id} className="star absolute rounded-full"
+                style={{
+                  left:s.x-size/2, top:s.y-size/2, width:size, height:size,
+                  background:color, border:s.owner?"1px solid white":"1px solid #333"
+                }}
+                title={s.name}
+                onClick={()=>onSelect(s)}></div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
 
-      // Mouvements
-      function onDown(e) { dragging = true; lastX = e.clientX; lastY = e.clientY; }
-      function onUp() { dragging = false; }
-      function onMove(e) {
-        if (dragging) {
-          setOffset(o => ({
-            x: o.x + (e.clientX - lastX) / scale,
-            y: o.y + (e.clientY - lastY) / scale,
-          }));
-          lastX = e.clientX; lastY = e.clientY;
-        }
-      }
-      function onWheel(e) {
-        setScale(s => Math.min(3, Math.max(0.3, s - e.deltaY * 0.001)));
-      }
+  /* ============================================================
+     PANNEAU PLANÈTE + BÂTIMENTS
+  ============================================================ */
+  const BASE_BUILDINGS = {
+    mine: { name: "Mine", cost: 50, prod: { minerai: 3 } },
+    power: { name: "Centrale", cost: 70, prod: { energie: 5 } },
+    lab: { name: "Laboratoire", cost: 120, prod: { science: 0.5 } },
+  };
 
-      canvas.addEventListener("mousedown", onDown);
-      canvas.addEventListener("mouseup", onUp);
-      canvas.addEventListener("mouseleave", onUp);
-      canvas.addEventListener("mousemove", onMove);
-      canvas.addEventListener("wheel", onWheel);
-      return () => {
-        cancelAnimationFrame(anim);
-        canvas.removeEventListener("mousedown", onDown);
-        canvas.removeEventListener("mouseup", onUp);
-        canvas.removeEventListener("mousemove", onMove);
-        canvas.removeEventListener("wheel", onWheel);
-      };
-    }, [stars, offset, scale]);
+  function PlanetPanel({ star, onBuild }) {
+    if(!star) return <div className="p-3 text-gray-400">Sélectionne une étoile.</div>;
+    return (
+      <div className="p-3">
+        <h3 className="font-bold text-cyan-300">{star.name}</h3>
+        <p className="text-sm text-gray-300">Population: {star.population.toLocaleString()}</p>
+        <p className="text-sm text-gray-300">Alignement: {star.alignment}</p>
+        <p className="text-sm text-gray-300">Énergie: {star.energy}</p>
+        <p className="text-sm text-gray-300">Bâtiments:</p>
+        {Object.entries(BASE_BUILDINGS).map(([k,b])=>(
+          <button key={k} onClick={()=>onBuild(k,b.cost)}
+            className="block bg-slate-700 hover:bg-slate-600 rounded px-2 py-1 my-1 w-full text-left text-sm">
+            {b.name} (niveau {star.buildings[k]}) — coût {b.cost}
+          </button>
+        ))}
+      </div>
+    );
+  }
 
-    // Vie et mort des étoiles
-    useEffect(() => {
-      const interval = setInterval(() => {
-        setStars(prev => prev.map(s => {
-          let newAge = s.age + Math.random() * 100;
-          let alive = s.alive;
-          if (newAge > 20000 && Math.random() < 0.01) alive = false;
-          if (!alive && Math.random() < 0.002) { // renaissance
-            newAge = 0;
-            alive = true;
-            s.x = Math.random() * GALAXY_SIZE;
-            s.y = Math.random() * GALAXY_SIZE;
+  /* ============================================================
+     JEU PRINCIPAL
+  ============================================================ */
+  function App(){
+    const [galaxy,setGalaxy]=useState(createGalaxy());
+    const [selected,setSelected]=useState(null);
+    const [resources,setResources]=useState({minerai:100,energie:100,cristal:50,science:0});
+    const [camera,setCamera]=useState({x:0,y:0,scale:0.9});
+    const [notif,setNotif]=useState("");
+
+    // production continue
+    useEffect(()=>{
+      const t=setInterval(()=>{
+        const prod={minerai:0,energie:0,science:0};
+        galaxy.forEach(s=>{
+          for(const [k,b] of Object.entries(s.buildings)){
+            const data=BASE_BUILDINGS[k];
+            for(const [res,val] of Object.entries(data.prod)){
+              prod[res]+=val*b;
+            }
           }
-          return { ...s, age: newAge, alive };
-        }));
-      }, 5000);
-      return () => clearInterval(interval);
-    }, []);
+        });
+        setResources(r=>({...r,minerai:r.minerai+prod.minerai,energie:r.energie+prod.energie,science:r.science+prod.science}));
+      },3000);
+      return()=>clearInterval(t);
+    },[galaxy]);
 
-    // Gestion musique
-    useEffect(() => {
-      if (audioRef.current) {
-        if (musicOn) audioRef.current.play();
-        else audioRef.current.pause();
-      }
-    }, [musicOn]);
-
-    function handleClick(e) {
-      const rect = e.target.getBoundingClientRect();
-      const clickX = (e.clientX - rect.left) / scale - offset.x;
-      const clickY = (e.clientY - rect.top) / scale - offset.y;
-      let closest = null;
-      let dist = 20 / scale;
-      for (let s of stars) {
-        if (!s.alive) continue;
-        const dx = s.x - clickX;
-        const dy = s.y - clickY;
-        const d = Math.sqrt(dx*dx + dy*dy);
-        if (d < dist) {
-          closest = s;
-          dist = d;
-        }
-      }
-      setSelectedStar(closest);
+    function handleBuild(type,cost){
+      if(!selected) return;
+      if(resources.minerai<cost){ setNotif("Pas assez de minerai !"); return; }
+      setResources(r=>({...r,minerai:r.minerai-cost}));
+      setGalaxy(g=>g.map(s=>s.id===selected.id?{...s,buildings:{...s.buildings,[type]:s.buildings[type]+1}}:s));
+      setNotif(`Construction: ${BASE_BUILDINGS[type].name}`);
     }
+
+    // events dynamiques
+    useEffect(()=>{
+      const t=setInterval(()=>{
+        const i=randint(0,galaxy.length-1);
+        const s=galaxy[i];
+        const change=Math.floor(s.population*rand(-0.01,0.02));
+        setGalaxy(g=>g.map(st=>st.id===s.id?{...st,population:Math.max(0,st.population+change)}:st));
+      },8000);
+      return()=>clearInterval(t);
+    },[galaxy]);
+
+    useEffect(()=>{ if(!notif)return; const t=setTimeout(()=>setNotif(""),3000); return()=>clearTimeout(t); },[notif]);
 
     return (
       <div className="w-full h-full relative">
-        <canvas
-          ref={canvasRef}
-          width={window.innerWidth}
-          height={window.innerHeight}
-          onClick={handleClick}
-        ></canvas>
-
-        {/* Musique de fond */}
-        <audio
-          ref={audioRef}
-          loop
-          src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_3b3ed7f777.mp3?filename=space-ambient-110050.mp3"
-        ></audio>
-        <button className="music-btn" onClick={() => setMusicOn(!musicOn)}>
-          {musicOn ? "🔇" : "🎵"}
-        </button>
-
-        {/* HUD basique */}
-        <div className="hud">
-          <div>🌌 Étoiles actives : {stars.filter(s => s.alive).length}/{stars.length}</div>
-          {selectedStar && (
-            <div>
-              <div>⭐ {selectedStar.name}</div>
-              <div>Âge : {Math.floor(selectedStar.age)}</div>
-            </div>
-          )}
+        <HUD resources={resources}/>
+        <StarMap galaxy={galaxy} onSelect={setSelected} camera={camera} setCamera={setCamera}/>
+        <div className="absolute right-3 top-20 bg-black bg-opacity-60 w-72 rounded">
+          <PlanetPanel star={selected} onBuild={handleBuild}/>
+        </div>
+        {notif && <div className="absolute top-16 right-6 bg-white bg-opacity-10 px-3 py-2 rounded notif">{notif}</div>}
+        <div className="absolute bottom-3 right-3 text-xs text-gray-400 bg-black bg-opacity-40 px-2 py-1 rounded">
+          Zoom/souris: déplacer — cliquez une étoile pour voir les infos
         </div>
       </div>
     );
   }
 
-  const root = ReactDOM.createRoot(document.getElementById("root"));
-  root.render(<App />);
-
+  ReactDOM.render(<App/>, document.getElementById("root"));
   </script>
-<!-- === Bloc 2/4 : Colonisation, ressources, bâtiments, ADN & IA symbiotique === -->
-
-<script type="text/babel">
-(function(){
-
-const { useState, useEffect, useRef } = React;
-
-/* ---------- Paramètres de jeu ---------- */
-const PLAYER_START_RES = { minerai: 300, energie: 200, cristal: 120, science: 20 };
-const COLONY_BASE_PROD = { minerai: 2, energie: 1.5, cristal: 0.6, science: 0.2 };
-const BUILDINGS_DEF = {
-  mine: { name: "Mine", cost: 60, prodMultiplier: { minerai: 1.6 } },
-  reactor: { name: "Réacteur", cost: 80, prodMultiplier: { energie: 1.7 } },
-  lab: { name: "Centre de recherche", cost: 140, prodMultiplier: { science: 1.8 } },
-  refinery: { name: "Raffinerie", cost: 120, prodMultiplier: { cristal: 1.6 } }
-};
-
-/* ---------- ADN du joueur (evolution) ---------- */
-function defaultADN(){
-  return {
-    type: "Neutre", // Industriel / Spirituel / Symbiotique / Militariste
-    points: 0,
-    traits: {} // flexible key/value
-  };
-}
-
-/* ---------- IA Symbiotique (L'Architecte) ---------- */
-function useSymbioticAI(pushMessage, playerADN, setPlayerBuffs) {
-  // small state internal to hook
-  useEffect(() => {
-    const t = setInterval(() => {
-      const r = Math.random();
-      if (r < 0.18) {
-        // proposition positive
-        const bonus = Math.floor(Math.random() * 40) + 20;
-        pushMessage(`L'Architecte t'offre un don : +${bonus} énergie temporaire`);
-        setPlayerBuffs(b => ({ ...b, energyBoost: { amount: bonus, until: Date.now() + 60_000 } }));
-      } else if (r < 0.28) {
-        // small malus / test
-        pushMessage(`Anomalie : l'Architecte exige un échange — perte de minerai.`);
-        setPlayerBuffs(b => ({ ...b, recentPenalty: { amount: 40, when: Date.now() } }));
-      } else if (r < 0.32 && playerADN.points >= 10) {
-        // offer evolution
-        pushMessage("L'Architecte propose une mutation ADN — acceptez-vous ? (menu Tech)");
-        // actual acceptance handled in UI; here we simply notify
-      }
-    }, 18_000 + Math.random()*12_000);
-    return () => clearInterval(t);
-  }, [pushMessage, playerADN, setPlayerBuffs]);
-}
-
-/* ---------- Utilities ---------- */
-function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
-function format(n){ return Math.floor(n).toLocaleString(); }
-
-/* ---------- Colony data structure helpers ---------- */
-function createColonyFromStar(star, owner) {
-  return {
-    id: "C_" + star.id,
-    starId: star.id,
-    owner,
-    level: 1,
-    buildings: { mine: 0, reactor: 0, lab: 0, refinery: 0 },
-    lastGather: Date.now()
-  };
-}
-
-/* ---------- UI Small: Panel for selected star and actions ---------- */
-function ColonyPanel({ selected, coloniesMap, onColonize, onBuild, playerRes }) {
-  if (!selected) return (
-    <div className="p-2 text-xs text-gray-300">
-      Clique sur une étoile pour actions (coloniser / explorer).
-    </div>
-  );
-
-  const colony = coloniesMap[selected.id];
-
-  return (
-    <div className="p-2 text-xs">
-      <div className="font-semibold">{selected.name}</div>
-      <div className="text-xs text-gray-300">Âge: {Math.floor(selected.age)}</div>
-      <div className="mt-2">
-        {!colony ? (
-          <>
-            <button className="w-full mb-1 px-2 py-1 bg-emerald-600 rounded text-xs" onClick={()=>onColonize(selected)}>
-              Coloniser ({format(150)} minerai)
-            </button>
-            <button className="w-full mb-1 px-2 py-1 bg-blue-600 rounded text-xs" onClick={()=>alert("Exploration narrative prochain bloc")}>
-              Explorer (événement narratif)
-            </button>
-          </>
-        ) : (
-          <>
-            <div className="text-xs mb-2">Colonie niveau {colony.level} • Bâtiments:</div>
-            {Object.entries(BUILDINGS_DEF).map(([k,b])=>(
-              <div key={k} className="mb-1">
-                <div className="flex justify-between items-center">
-                  <div>{b.name} (lvl {colony.buildings[k]})</div>
-                  <div>
-                    <button
-                      className="px-2 py-0.5 bg-slate-700 rounded text-xs"
-                      onClick={()=>onBuild(colony, k)}
-                      disabled={playerRes.minerai < b.cost}
-                    >
-                      Améliorer ({b.cost})
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/* ---------- Main Enhanced App (AppV2) ---------- */
-function AppV2(){
-  // stars recreated (we reuse previous generateStars from Bloc1 if present)
-  // but to be safe, if not present, create a new small generator
-  const baseStars = (typeof generateStars === "function") ? generateStars() : (() => {
-    const arr=[]; for(let i=0;i<120;i++){ arr.push({ id:i, name:"S"+i, x:Math.random()*GALAXY_SIZE, y:Math.random()*GALAXY_SIZE, age:Math.random()*10000, brightness:Math.random()*0.7+0.2, color:"#88f", alive:true }); } return arr;
-  })();
-
-  const [stars, setStars] = useState(baseStars);
-  const [selected, setSelected] = useState(null);
-  const [colonies, setColonies] = useState(() => ({})); // starId -> colony
-  const [player, setPlayer] = useState({ name: "Commandant", race: "Humain" });
-  const [resources, setResources] = useState({...PLAYER_START_RES});
-  const [playerADN, setPlayerADN] = useState(defaultADN());
-  const [buffs, setBuffs] = useState({});
-  const [log, setLog] = useState([]);
-  const [tick, setTick] = useState(0);
-
-  // helper map for quick lookup
-  useEffect(()=>{setColonies(c=>({...c}));},[]);
-
-  function pushLog(msg){
-    setLog(l => ([`${new Date().toLocaleTimeString()} — ${msg}`, ...l].slice(0,300)));
-  }
-
-  // Symbiotic AI hook
-  useSymbioticAI(msg=>{ pushLog(msg); }, playerADN, setBuffs);
-
-  // Tick: resource gathering, colony production, buff expiry, star evolution (small)
-  useEffect(()=>{
-    const t = setInterval(()=>{
-      setTick(t => t + 1);
-
-      // production per colony
-      setResources(prev => {
-        let next = {...prev};
-        Object.values(colonies).forEach(col => {
-          // if star dead skip
-          const star = stars.find(s=>s.id === col.starId);
-          if(!star || !star.alive) return;
-          // base production scaled by colony level and buildings
-          const levelMult = 1 + (col.level - 1) * 0.25;
-          const b = col.buildings;
-          // calculate bonuses from buildings
-          let prod = {...COLONY_BASE_PROD};
-          if (b.mine) prod.minerai *= (1 + b.mine * 0.25);
-          if (b.reactor) prod.energie *= (1 + b.reactor * 0.28);
-          if (b.refinery) prod.cristal *= (1 + b.refinery * 0.22);
-          if (b.lab) prod.science *= (1 + b.lab * 0.3);
-
-          next.minerai += prod.minerai * levelMult;
-          next.energie += prod.energie * levelMult;
-          next.cristal += prod.cristal * levelMult;
-          next.science += prod.science * levelMult;
-        });
-
-        // apply temporary buffs (example: energy boost)
-        if (buffs.energyBoost && buffs.energyBoost.until > Date.now()){
-          next.energie += buffs.energyBoost.amount * 0.01; // small passive bonus each tick
-        } else if (buffs.energyBoost && buffs.energyBoost.until <= Date.now()){
-          // expire buff
-          setBuffs(b=>{ const nb = {...b}; delete nb.energyBoost; return nb; });
-        }
-
-        // ensure resources non-negative
-        next.minerai = Math.max(0, next.minerai);
-        next.energie = Math.max(0, next.energie);
-        next.cristal = Math.max(0, next.cristal);
-        next.science = Math.max(0, next.science);
-
-        return next;
-      });
-
-      // small chance of colony level-up from growth
-      if (Math.random() < 0.12) {
-        const keys = Object.keys(colonies);
-        if (keys.length > 0) {
-          const pick = colonies[keys[Math.floor(Math.random()*keys.length)]];
-          // level-up probability based on lab presence
-          if (Math.random() < 0.3) {
-            setColonies(prev => ({ ...prev, [pick.starId]: { ...pick, level: Math.min(10, pick.level + 1) } }));
-            pushLog(`Colonie sur ${pick.starId} a progressé.`);
-          }
-        }
-      }
-
-      // star aging small chance to die (supernova)
-      if (Math.random() < 0.02) {
-        setStars(prev => {
-          const copy = prev.slice();
-          const s = copy[Math.floor(Math.random()*copy.length)];
-          if (s && s.alive && s.age > 15000 && Math.random() < 0.25) {
-            s.alive = false;
-            pushLog(`Supernova : ${s.name} a explosé !`);
-            // if colony there, remove and cause resource loss
-            if (colonies[s.id]) {
-              setColonies(c => { const nc = {...c}; delete nc[s.id]; pushLog(`Colonie perdue sur ${s.name}`); return nc; });
-              setResources(r => ({ ...r, minerai: Math.max(0, r.minerai - 80) }));
-            }
-          }
-          // also age stars a bit
-          copy.forEach(x => x.age += Math.random()*30);
-          return copy;
-        });
-      }
-
-    }, 3000);
-    return ()=>clearInterval(t);
-  }, [colonies, stars, buffs]);
-
-  // Colonize action
-  function colonizeStar(star){
-    const cost = 150;
-    if (resources.minerai < cost) {
-      pushLog("Pas assez de minerai pour coloniser.");
-      return;
-    }
-    setResources(r => ({ ...r, minerai: r.minerai - cost }));
-    const colony = createColonyFromStar(star, player.name);
-    setColonies(prev => ({ ...prev, [star.id]: colony }));
-    pushLog(`${player.name} a colonisé ${star.name}.`);
-  }
-
-  // Build on colony
-  function buildOnColony(colony, buildingKey){
-    const def = BUILDINGS_DEF[buildingKey];
-    if (!def) return;
-    // cost scales with number built
-    const cost = Math.floor(def.cost * (1 + colony.buildings[buildingKey] * 0.6));
-    if (resources.minerai < cost) {
-      pushLog("Pas assez de minerai pour construire.");
-      return;
-    }
-    setResources(r => ({ ...r, minerai: r.minerai - cost }));
-    setColonies(prev => ({ ...prev, [colony.starId]: { ...colony, buildings: { ...colony.buildings, [buildingKey]: colony.buildings[buildingKey] + 1 } } }));
-    pushLog(`${def.name} construit sur ${colony.starId}. Coût ${cost}`);
-    // small ADN gain for building complex things
-    setPlayerADN(a => ({ ...a, points: a.points + 1 }));
-  }
-
-  /* ---------- UI Rendering ---------- */
-
-  // quick map of colonies by star id
-  const coloniesMap = colonies;
-
-  // select handler (we integrate click logic from canvas in Bloc1 by hooking setSelected)
-  // But in case canvas click sets selected star object, we accept that.
-  // Provide simple top-right panel: player, resources, ADN, quick controls
-  return (
-    <div className="w-full h-full relative select-none">
-      {/* Topbar */}
-      <div className="absolute top-3 left-3 text-cyan-300 text-sm font-bold z-50">
-        Galaxie V7 — Conscience Cosmique
-      </div>
-
-      {/* HUD left */}
-      <div className="absolute top-3 left-44 bg-black bg-opacity-40 p-2 rounded z-50 text-xs">
-        <div><strong>{player.name}</strong> • {player.race}</div>
-        <div>Minerai: {format(resources.minerai)} • Énergie: {format(resources.energie)}</div>
-        <div>Cristal: {format(resources.cristal)} • Science: {format(resources.science)}</div>
-        <div>ADN: {playerADN.points} pts • Type: {playerADN.type}</div>
-      </div>
-
-      {/* Right side: selected star panel */}
-      <div className="absolute right-4 top-20 w-96 z-50">
-        <div className="bg-black bg-opacity-60 p-3 rounded">
-          <ColonyPanel
-            selected={selected}
-            coloniesMap={coloniesMap}
-            onColonize={(s)=>colonizeStar(s)}
-            onBuild={(col, k)=>buildOnColony(col, k)}
-            playerRes={resources}
-          />
-        </div>
-
-        <div className="mt-3 bg-black bg-opacity-60 p-2 rounded text-xs">
-          <div className="font-semibold text-cyan-200">Colonies</div>
-          <div style={{maxHeight: 160, overflowY: "auto"}}>
-            {Object.values(colonies).length === 0 && <div className="text-xs text-gray-300">Aucune colonie.</div>}
-            {Object.values(colonies).map(c => {
-              const star = stars.find(s=>s.id===c.starId) || { name: c.starId };
-              return <div key={c.id} className="text-xs border-b border-white border-opacity-5 py-1">
-                <div className="font-medium">{star.name}</div>
-                <div className="text-xs text-gray-300">Lvl {c.level} • Bâtiments: {Object.values(c.buildings).reduce((a,b)=>a+b,0)}</div>
-              </div>;
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* bottom-left: journal */}
-      <div className="absolute bottom-4 left-4 bg-black bg-opacity-60 p-3 rounded w-96 max-h-[46vh] overflow-y-auto journal z-50">
-        <div className="font-semibold text-cyan-200 mb-1">Journal</div>
-        {log.map((l,i)=> <div key={i} className="text-xs mb-1">• {l}</div>)}
-      </div>
-
-      {/* small helper */}
-      <div className="absolute bottom-4 right-4 bg-black bg-opacity-50 p-2 rounded text-xs z-50">Astuce: Utilise la souris pour déplacer/zoomer la galaxie. Clique pour sélectionner.</div>
-    </div>
-  );
-}
-
-/* Render AppV2 to replace previous rendering */
-try {
-  const root2 = ReactDOM.createRoot(document.getElementById("root"));
-  root2.render(<AppV2 />);
-} catch (err) {
-  // fallback for older React versions
-  ReactDOM.render(<AppV2 />, document.getElementById("root"));
-}
-
-})(); 
-</script>
-
-  <!-- === Bloc 3/4 : Événements narratifs, ligne temporelle, arbre technologique === -->
-<script type="text/babel">
-(function(){
-
-const { useState, useEffect } = React;
-
-/* ============================================================
-   Système d’événements narratifs et ligne temporelle
-   ============================================================ */
-
-const EVENT_TYPES = [
-  { key: "anomaly", label: "Anomalie détectée", color: "#4af" },
-  { key: "signal", label: "Signal inconnu", color: "#9f4" },
-  { key: "crisis", label: "Crise cosmique", color: "#f55" },
-  { key: "artifact", label: "Artefact ancien", color: "#fa0" },
-];
-
-function randomEvent(){
-  const base = EVENT_TYPES[Math.floor(Math.random()*EVENT_TYPES.length)];
-  const descs = {
-    anomaly: [
-      "Une distorsion du champ quantique a été repérée.",
-      "Des fluctuations gravitationnelles perturbent les communications.",
-    ],
-    signal: [
-      "Un signal répétitif d’origine inconnue provient du vide interstellaire.",
-      "Des ondes radio évoquant un langage structuré ont été captées.",
-    ],
-    crisis: [
-      "Un effondrement stellaire menace plusieurs colonies.",
-      "Une éruption solaire géante réduit la production énergétique.",
-    ],
-    artifact: [
-      "Un artefact cristallin a été découvert sur une planète abandonnée.",
-      "Un noyau de donnée alien a été trouvé intact.",
-    ]
-  };
-  const descList = descs[base.key];
-  return {
-    id: Math.random().toString(36).substr(2,9),
-    type: base.key,
-    label: base.label,
-    desc: descList[Math.floor(Math.random()*descList.length)],
-    color: base.color,
-    time: new Date().toLocaleTimeString(),
-    resolved: false
-  };
-}
-
-function useGalacticTimeline(pushLog, addResearchPoints){
-  const [events, setEvents] = useState([]);
-  useEffect(()=>{
-    const t = setInterval(()=>{
-      const e = randomEvent();
-      setEvents(prev => [e, ...prev].slice(0, 40));
-      pushLog(`Nouvel événement : ${e.label}`);
-      if (Math.random() < 0.3) addResearchPoints(1);
-    }, 25_000);
-    return ()=>clearInterval(t);
-  }, []);
-  return [events, setEvents];
-}
-
-function TimelinePanel({ events, onResolve }){
-  return (
-    <div className="p-2 text-xs">
-      <div className="font-semibold text-cyan-300 mb-1">Ligne temporelle galactique</div>
-      {events.length === 0 && <div className="text-gray-400">Aucun événement pour l'instant.</div>}
-      {events.map(e=>(
-        <div key={e.id} className="mb-1 border-l-2 pl-2" style={{borderColor:e.color}}>
-          <div className="font-medium">{e.label}</div>
-          <div className="text-gray-400">{e.desc}</div>
-          {!e.resolved ? (
-            <button className="mt-1 px-2 py-0.5 bg-slate-700 rounded"
-              onClick={()=>onResolve(e)}>Résoudre</button>
-          ) : (
-            <div className="text-emerald-400">Résolu</div>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/* ============================================================
-   Arbre technologique simple
-   ============================================================ */
-
-const TECH_TREE = {
-  propulsion: { name: "Propulsion Avancée", cost: 15, desc: "Permet les voyages intersystèmes." },
-  fusion: { name: "Énergie de Fusion", cost: 20, desc: "Augmente la production d'énergie." },
-  biotech: { name: "Biotechnologie", cost: 25, desc: "Améliore la symbiose ADN." },
-  singularity: { name: "Singularité Contrôlée", cost: 40, desc: "Débloque les armes stellaires." },
-};
-
-function TechPanel({ research, onResearch }){
-  return (
-    <div className="p-2 text-xs">
-      <div className="font-semibold text-cyan-300 mb-1">Technologies</div>
-      <div>Points de recherche: {research.points}</div>
-      {Object.entries(TECH_TREE).map(([key, tech])=>{
-        const unlocked = research.unlocked.includes(key);
-        return (
-          <div key={key} className="mb-1">
-            <div className="font-medium">{tech.name}</div>
-            <div className="text-gray-400">{tech.desc}</div>
-            {unlocked ? (
-              <div className="text-emerald-400">Découverte acquise</div>
-            ) : (
-              <button className="mt-1 px-2 py-0.5 bg-blue-700 rounded text-xs"
-                onClick={()=>onResearch(key)} disabled={research.points < tech.cost}>
-                Rechercher ({tech.cost})
-              </button>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-/* ============================================================
-   Fusion dans App principal existant
-   ============================================================ */
-
-window.injectV7Bloc3 = function(AppV2, React, ReactDOM){
-
-  const EnhancedApp = () => {
-    const [research, setResearch] = useState({ points: 0, unlocked: [] });
-    const [events, setEvents] = useState([]);
-    const [logs, setLogs] = useState([]);
-
-    function pushLog(msg){
-      setLogs(l => ([`${new Date().toLocaleTimeString()} — ${msg}`, ...l].slice(0,300)));
-    }
-
-    function addResearchPoints(n){
-      setResearch(r=>({ ...r, points: r.points + n }));
-    }
-
-    const [timeline, setTimeline] = useGalacticTimeline(pushLog, addResearchPoints);
-
-    function resolveEvent(e){
-      setTimeline(prev => prev.map(x=>x.id===e.id?{...x,resolved:true}:x));
-      pushLog(`${e.label} a été résolu.`);
-      if (Math.random()<0.5) addResearchPoints(2);
-    }
-
-    function handleResearch(key){
-      const tech = TECH_TREE[key];
-      if (!tech) return;
-      setResearch(r=>{
-        if (r.points < tech.cost) return r;
-        return {
-          ...r,
-          points: r.points - tech.cost,
-          unlocked: [...r.unlocked, key]
-        };
-      });
-      pushLog(`Technologie ${TECH_TREE[key].name} découverte.`);
-    }
-
-    // rendu combiné
-    return (
-      <div className="w-full h-full relative text-xs text-gray-200">
-        <div className="absolute top-2 left-2 text-lg text-cyan-300 font-bold">Galaxie V7 — Narration Active</div>
-
-        {/* Panneau de gauche : Timeline */}
-        <div className="absolute left-4 top-16 bg-black bg-opacity-60 rounded p-2 w-80 h-[70vh] overflow-y-auto">
-          <TimelinePanel events={timeline} onResolve={resolveEvent}/>
-        </div>
-
-        {/* Panneau de droite : Technologies */}
-        <div className="absolute right-4 top-16 bg-black bg-opacity-60 rounded p-2 w-80 h-[70vh] overflow-y-auto">
-          <TechPanel research={research} onResearch={handleResearch}/>
-        </div>
-
-        {/* Bas : Journal global */}
-        <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-60 rounded p-2 w-[70%] max-h-[25vh] overflow-y-auto">
-          <div className="font-semibold text-cyan-300">Journal Galactique</div>
-          {logs.map((l,i)=><div key={i}>• {l}</div>)}
-        </div>
-      </div>
-    );
-  };
-
-  try {
-    const root3 = ReactDOM.createRoot(document.getElementById("root"));
-    root3.render(<EnhancedApp />);
-  } catch (err) {
-    ReactDOM.render(<EnhancedApp />, document.getElementById("root"));
-  }
-};
-
-// exécution immédiate
-if (typeof AppV2 !== "undefined") {
-  window.injectV7Bloc3(AppV2, React, ReactDOM);
-}
-
-})();
-</script>
-
-  <!-- === Bloc 4/4 : Effets visuels, musique, sauvegarde, écran titre === -->
-<script type="text/babel">
-(function(){
-
-const { useState, useEffect, useRef } = React;
-
-/* ============================================================
-   Gestion de la musique et des sons
-   ============================================================ */
-function useAmbientAudio(){
-  const audioRef = useRef(null);
-  useEffect(()=>{
-    audioRef.current = new Audio("https://cdn.pixabay.com/download/audio/2022/03/15/audio_8d97a6eece.mp3?filename=deep-space-ambient-112199.mp3");
-    audioRef.current.loop = true;
-    audioRef.current.volume = 0.25;
-    audioRef.current.play().catch(()=>{});
-    return ()=> audioRef.current && audioRef.current.pause();
-  },[]);
-  return audioRef;
-}
-
-function playClick(){
-  const a = new Audio("https://cdn.pixabay.com/download/audio/2022/10/25/audio_4b7ab04e2b.mp3?filename=ui-confirmation-alert-97999.mp3");
-  a.volume = 0.4;
-  a.play();
-}
-
-/* ============================================================
-   Écran titre
-   ============================================================ */
-function TitleScreen({ onStart }){
-  return (
-    <div className="absolute inset-0 flex flex-col items-center justify-center text-center bg-gradient-to-b from-black via-slate-900 to-black text-cyan-200 animate-fadein">
-      <h1 className="text-5xl font-extrabold mb-4">🌌 La Galaxie Vivante — V7+</h1>
-      <p className="mb-6 text-gray-300 text-sm w-[60%]">Une simulation persistante d’univers où chaque étoile raconte son histoire. Les civilisations naissent, chutent, se redressent... et toi, voyageur, peux observer ou influencer leur destin.</p>
-      <button onClick={()=>{ playClick(); onStart(); }} className="px-6 py-3 bg-cyan-600 hover:bg-cyan-500 rounded-xl text-lg font-semibold transition-all">
-        Commencer l’observation
-      </button>
-      <p className="mt-8 text-gray-500 text-xs">© 2025 Projet Galaxie Vivante – expérimental</p>
-    </div>
-  );
-}
-
-/* ============================================================
-   Étoiles d’ambiance
-   ============================================================ */
-function AnimatedBackground(){
-  const stars = Array.from({length:80},()=>({
-    x: Math.random()*100,
-    y: Math.random()*100,
-    s: Math.random()*2+0.5,
-    d: Math.random()*1.5+0.5
-  }));
-  return (
-    <div className="absolute inset-0 overflow-hidden z-0">
-      {stars.map((st,i)=>(
-        <div key={i} className="absolute bg-white rounded-full opacity-50 animate-pulse"
-          style={{
-            left: st.x+"%",
-            top: st.y+"%",
-            width: st.s+"px",
-            height: st.s+"px",
-            animationDuration: (5+st.d)+"s"
-          }}/>
-      ))}
-    </div>
-  );
-}
-
-/* ============================================================
-   Sauvegarde / Chargement automatique (localStorage)
-   ============================================================ */
-function usePersistentState(key, defaultValue){
-  const [state, setState] = useState(()=>{
-    try {
-      const val = localStorage.getItem(key);
-      return val ? JSON.parse(val) : defaultValue;
-    } catch { return defaultValue; }
-  });
-  useEffect(()=>{ localStorage.setItem(key, JSON.stringify(state)); },[state]);
-  return [state, setState];
-}
-
-/* ============================================================
-   Application principale combinée
-   ============================================================ */
-function GalacticExperience(){
-  const [started, setStarted] = useState(false);
-  const [volume, setVolume] = usePersistentState("galaxy_volume", 0.25);
-  const audioRef = useAmbientAudio();
-
-  const [stats, setStats] = usePersistentState("galaxy_progress", {
-    visits: 0,
-    totalEvents: 0,
-    techUnlocked: 0,
-  });
-
-  function handleStart(){
-    setStarted(true);
-    setStats(s => ({...s, visits: s.visits+1}));
-  }
-
-  function handleMute(){
-    if (audioRef.current){
-      audioRef.current.muted = !audioRef.current.muted;
-    }
-  }
-
-  return (
-    <div className="w-full h-full relative font-sans text-gray-200 overflow-hidden">
-      <AnimatedBackground/>
-      {!started && <TitleScreen onStart={handleStart}/>}
-
-      {started && (
-        <div className="absolute inset-0 z-10 animate-fadein-slow">
-          <div id="galaxy-v7-root" className="w-full h-full"></div>
-
-          {/* Contrôles audio et infos persistantes */}
-          <div className="absolute top-2 right-3 flex gap-3 items-center text-xs text-gray-300 bg-black bg-opacity-40 px-2 py-1 rounded-lg">
-            <div>Volume: {(volume*100).toFixed(0)}%</div>
-            <input type="range" min="0" max="1" step="0.01" value={volume}
-              onChange={(e)=>{
-                setVolume(parseFloat(e.target.value));
-                if (audioRef.current) audioRef.current.volume = parseFloat(e.target.value);
-              }}/>
-            <button onClick={handleMute} className="px-2 py-0.5 bg-slate-700 rounded">🔇</button>
-          </div>
-
-          <div className="absolute bottom-2 right-3 text-xs text-gray-400">
-            Visites: {stats.visits} | Événements: {stats.totalEvents} | Techs: {stats.techUnlocked}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ============================================================
-   Styles additionnels
-   ============================================================ */
-const style = document.createElement("style");
-style.innerHTML = `
-@keyframes fadein { from {opacity:0; transform:scale(1.02);} to {opacity:1; transform:scale(1);} }
-@keyframes fadein-slow { from {opacity:0;} to {opacity:1;} }
-.animate-fadein { animation: fadein 1s ease-out; }
-.animate-fadein-slow { animation: fadein-slow 2s ease-out; }
-`;
-document.head.appendChild(style);
-
-/* ============================================================
-   Initialisation
-   ============================================================ */
-try {
-  const root4 = ReactDOM.createRoot(document.getElementById("root"));
-  root4.render(<GalacticExperience />);
-} catch (err) {
-  ReactDOM.render(<GalacticExperience />, document.getElementById("root"));
-}
-
-})();
-</script>
-
-  
 </body>
 </html>
