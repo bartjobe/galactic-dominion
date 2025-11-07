@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>La Galaxie Vivante — V2</title>
+
+  <!-- React 17 + Babel (permet JSX inline) -->
+  <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Tailwind CSS (optionnel mais utile pour styles rapides) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    html,body { height:100%; margin:0; background:#030414; color:#fff; font-family:Inter,ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial; }
+    #root { width:100%; height:100vh; overflow:hidden; position:relative; }
+    .star { transition: transform 0.12s, box-shadow 0.12s; }
+    .star:hover { transform: scale(1.4); z-index: 50; box-shadow:0 6px 18px rgba(0,0,0,0.6); }
+    .notif { animation: pop .35s ease-out; }
+    @keyframes pop { from { transform: translateY(8px); opacity:0 } to { transform: translateY(0); opacity:1 } }
+    /* small scrollbar for journal */
+    .journal::-webkit-scrollbar { width:8px; height:8px }
+    .journal::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius:8px }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+  const { useState, useEffect, useRef } = React;
+
+  /* ---------- Utilitaires ---------- */
+  const rand = (min, max) => Math.random()*(max-min)+min;
+  const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+  const now = () => Date.now();
+
+  /* Génère un nom procédural simple */
+  const randomName = () => {
+    const p = ["zor","kan","vel","tor","lin","rax","mer","ion","tal","quor","xen","phi","lun","dra","or","ess","ari"];
+    return p[Math.floor(Math.random()*p.length)] + p[Math.floor(Math.random()*p.length)] + "-" + Math.floor(Math.random()*999);
+  };
+
+  /* ---------- Galaxy generation & evolution ---------- */
+  const WORLD_SIZE = 3000; // size in world coordinates (px)
+  const DEFAULT_COUNT = 30;
+
+  function makeGalaxy(seedCount = DEFAULT_COUNT){
+    const arr = [];
+    for(let i=0;i<seedCount;i++){
+      arr.push({
+        id: `s-${i}-${Math.floor(Math.random()*1e6)}`,
+        name: randomName(),
+        x: Math.floor(rand(50, WORLD_SIZE-50)),
+        y: Math.floor(rand(50, WORLD_SIZE-50)),
+        population: Math.floor(rand(50_000, 5_000_000)),
+        tech: Math.floor(rand(1,12)),
+        status: "paix", // paix | guerre | expansion | collapsed
+        lastEvent: null,
+        colorSeed: Math.random()
+      });
+    }
+    return arr;
+  }
+
+  /* Evolution function: apply simple rules per hour passed */
+  function evolve(galaxy, hours){
+    const g = galaxy.map(star => {
+      let s = { ...star };
+      // population grows/shrinks depending on status
+      const growthMul = s.status === "expansion" ? 1.02 : s.status === "guerre" ? 0.96 : 1.005;
+      s.population = Math.max(0, Math.floor(s.population * Math.pow(growthMul, hours)));
+      // chance to change tech
+      if (Math.random() < 0.02 * hours) s.tech = s.tech + Math.floor(rand(0,Math.max(1,hours/6)));
+      // chance to trigger a new status
+      if (Math.random() < 0.01 * hours) {
+        const r = Math.random();
+        if (r < 0.4) s.status = "paix";
+        else if (r < 0.7) s.status = "expansion";
+        else s.status = "guerre";
+      }
+      // random collapse / rebirth
+      if (Math.random() < 0.001 * hours) {
+        s.status = "collapsed";
+        s.population = Math.floor(s.population * 0.1);
+      }
+      s.lastEvent = `Evolué ${hours}h`;
+      return s;
+    });
+    return g;
+  }
+
+  /* ---------- Events system ---------- */
+  function pickEvent(star){
+    // returns {type, text, impact}
+    const r = Math.random();
+    if (r < 0.25) {
+      // discovery increases tech/pop
+      const deltaTech = 1 + Math.floor(rand(0,2));
+      const deltaPop = Math.floor(star.population * rand(0.01, 0.08));
+      return { type:"decouverte", text: `${star.name} découvre une nouvelle technologie (+${deltaTech})`, impact: s => ({ ...s, tech: s.tech + deltaTech, population: s.population + deltaPop }) };
+    } else if (r < 0.55) {
+      // expansion
+      return { type:"expansion", text: `${star.name} lance une phase d'expansion`, impact: s => ({ ...s, status: "expansion" }) };
+    } else if (r < 0.85) {
+      // war
+      const loss = Math.floor(star.population * rand(0.1,0.35));
+      return { type:"guerre", text: `${star.name} est en guerre (-${Math.floor(loss).toLocaleString()} pop)`, impact: s => ({ ...s, status: "guerre", population: Math.max(0, s.population - loss) }) };
+    } else {
+      // alliance / trade => small pop + tech
+      const popGain = Math.floor(star.population * rand(0.005, 0.02));
+      return { type:"alliance", text: `${star.name} signe un pacte commercial (+${popGain})`, impact: s => ({ ...s, population: s.population + popGain, tech: s.tech + (Math.random()<0.3?1:0) }) };
+    }
+  }
+
+  /* ---------- Component: GalaxyMap ---------- */
+  function GalaxyMap({ galaxy, onSelect, camera, setCamera, highlightedId }) {
+    const mapRef = useRef(null);
+    const dragging = useRef(false);
+    const last = useRef({x:0,y:0});
+
+    useEffect(() => {
+      const el = mapRef.current;
+      if (!el) return;
+      const handleWheel = (e) => {
+        e.preventDefault();
+        const delta = -e.deltaY;
+        const zoomFactor = delta > 0 ? 1.12 : 0.88;
+        // zoom around mouse point
+        const rect = el.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        const worldX = (mx - camera.x) / camera.scale;
+        const worldY = (my - camera.y) / camera.scale;
+        const newScale = clamp(camera.scale * zoomFactor, 0.25, 2.5);
+        const nx = mx - worldX * newScale;
+        const ny = my - worldY * newScale;
+        setCamera(prev => ({...prev, scale: newScale, x: nx, y: ny}));
+      };
+      el.addEventListener('wheel', handleWheel, { passive:false });
+      return () => el.removeEventListener('wheel', handleWheel);
+    }, [camera, setCamera]);
+
+    const handlePointerDown = (e) => {
+      dragging.current = true;
+      last.current = { x: e.clientX, y: e.clientY };
+    };
+    const handlePointerMove = (e) => {
+      if (!dragging.current) return;
+      const dx = e.clientX - last.current.x;
+      const dy = e.clientY - last.current.y;
+      last.current = { x: e.clientX, y: e.clientY };
+      setCamera(prev => ({...prev, x: prev.x + dx, y: prev.y + dy}));
+    };
+    const handlePointerUp = () => {
+      dragging.current = false;
+    };
+
+    // compute transform for container
+    const transform = `translate(${camera.x}px, ${camera.y}px) scale(${camera.scale})`;
+
+    return (
+      <div
+        ref={mapRef}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerLeave={handlePointerUp}
+        className="absolute inset-0"
+        style={{ touchAction: 'none' }}
+      >
+        <div
+          style={{
+            position: 'absolute',
+            width: WORLD_SIZE,
+            height: WORLD_SIZE,
+            left: (window.innerWidth - WORLD_SIZE)/2,
+            top: (window.innerHeight - WORLD_SIZE)/2,
+            transform,
+            transformOrigin: '0 0',
+            transition: dragging.current ? 'none' : 'transform 0.08s',
+          }}
+        >
+          {/* background grid */}
+          <div style={{ position:'absolute', left:0, top:0, width: WORLD_SIZE, height: WORLD_SIZE }}>
+            {/* subtle starfield */}
+            {[...Array(120)].map((_,i)=>(
+              <div key={i} style={{
+                position:'absolute',
+                left: rand(0,WORLD_SIZE),
+                top: rand(0,WORLD_SIZE),
+                width: Math.random()*2+0.5,
+                height: Math.random()*2+0.5,
+                background:'rgba(255,255,255,0.06)',
+                borderRadius: 999
+              }} />
+            ))}
+          </div>
+
+          {/* systems */}
+          {galaxy.map(s => {
+            const size = clamp(6 + Math.log10(Math.max(1, s.population))/1.2, 6, 28);
+            const color = s.status === 'guerre' ? '#ff4d4f' : s.status === 'expansion' ? '#7efc6b' : s.status === 'collapsed' ? '#666' : '#3dd5ff';
+            return (
+              <div
+                key={s.id}
+                className={`star`}
+                onClick={(ev) => { ev.stopPropagation(); onSelect(s); }}
+                title={`${s.name}\n${s.population.toLocaleString()} pop • tech ${s.tech}`}
+                style={{
+                  position:'absolute',
+                  left: s.x - size/2,
+                  top: s.y - size/2,
+                  width: size,
+                  height: size,
+                  borderRadius: 999,
+                  background: color,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#001',
+                  fontSize: Math.min(14, size-2),
+                  fontWeight: '700',
+                  boxShadow: highlightedId === s.id ? '0 6px 20px rgba(0,0,0,0.6)' : 'none',
+                  border: `1px solid rgba(255,255,255,0.06)`,
+                  cursor: 'pointer',
+                }}
+              >
+                {/* small badge for tech level */}
+                <div style={{ position:'absolute', right:-6, top:-6, fontSize:9, background:'rgba(0,0,0,0.4)', padding:'2px 4px', borderRadius:6 }}>
+                  {s.tech}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  /* ---------- Main App ---------- */
+  function App(){
+    const [galaxy, setGalaxy] = useState([]);
+    const [selected, setSelected] = useState(null);
+    const [log, setLog] = useState([]);
+    const [notif, setNotif] = useState(null);
+    const [camera, setCamera] = useState({ x: 0, y: 0, scale: 0.9 });
+    const [highlightedId, setHighlightedId] = useState(null);
+
+    // load or create
+    useEffect(() => {
+      const save = localStorage.getItem("galaxy_v2_save");
+      const last = localStorage.getItem("galaxy_v2_last");
+      if (save) {
+        let g = JSON.parse(save);
+        if (last) {
+          const hours = Math.floor((now() - parseInt(last,10)) / 3600000);
+          if (hours > 0) {
+            g = evolve(g, hours);
+            addLog(`${hours}h se sont écoulées — la galaxie a évolué pendant ton absence.`);
+            setNotif(`${hours}h écoulées — évolution appliquée`);
+          }
+        }
+        setGalaxy(g);
+      } else {
+        const g = makeGalaxy();
+        setGalaxy(g);
+        localStorage.setItem("galaxy_v2_save", JSON.stringify(g));
+        addLog("Nouvelle galaxie générée.");
+      }
+      localStorage.setItem("galaxy_v2_last", now());
+    }, []);
+
+    // autosave every 10s
+    useEffect(() => {
+      const t = setInterval(() => {
+        localStorage.setItem("galaxy_v2_save", JSON.stringify(galaxy));
+        localStorage.setItem("galaxy_v2_last", now());
+      }, 10000);
+      return () => clearInterval(t);
+    }, [galaxy]);
+
+    // periodic event generator
+    useEffect(() => {
+      const t = setInterval(() => {
+        if (galaxy.length === 0) return;
+        const index = Math.floor(rand(0, galaxy.length));
+        const star = galaxy[index];
+        const ev = pickEvent(star);
+        const updated = galaxy.map(s => s.id === star.id ? { ...ev.impact(s), lastEvent: ev.text } : s);
+        setGalaxy(updated);
+        addLog(ev.text);
+        setNotif(ev.text);
+        setHighlightedId(star.id);
+        setTimeout(()=>setHighlightedId(null), 3500);
+      }, 7000); // every 7s
+      return () => clearInterval(t);
+    }, [galaxy]);
+
+    // notification timeout
+    useEffect(() => {
+      if (!notif) return;
+      const t = setTimeout(()=> setNotif(null), 4200);
+      return ()=> clearTimeout(t);
+    }, [notif]);
+
+    function addLog(text){
+      setLog(l => [ `${new Date().toLocaleTimeString()} — ${text}`, ...l].slice(0, 80));
+    }
+
+    const handleSelect = (s) => {
+      setSelected(s);
+      addLog(`Ouverture de la fiche: ${s.name}`);
+    };
+
+    // manual evolve + quick actions
+    const applyFastForward = (hours) => {
+      const g = evolve(galaxy, hours);
+      setGalaxy(g);
+      addLog(`Avance rapide: ${hours}h appliquées.`);
+      setNotif(`${hours}h appliquées`);
+    };
+
+    const addSystem = () => {
+      const s = {
+        id: `s-${Math.floor(Math.random()*1e9)}`,
+        name: randomName(),
+        x: Math.floor(rand(50, WORLD_SIZE-50)),
+        y: Math.floor(rand(50, WORLD_SIZE-50)),
+        population: Math.floor(rand(20_000, 400_000)),
+        tech: Math.floor(rand(1,6)),
+        status: "paix",
+        lastEvent: "Né"
+      };
+      setGalaxy(g => [ ...g, s ]);
+      addLog(`Nouvelle étoile créée: ${s.name}`);
+      setNotif(`Système ${s.name} créé`);
+    };
+
+    const resetGalaxy = () => {
+      if (!confirm("Réinitialiser la galaxie ? (perdra le progrès local)")) return;
+      const g = makeGalaxy();
+      setGalaxy(g);
+      localStorage.setItem("galaxy_v2_save", JSON.stringify(g));
+      localStorage.setItem("galaxy_v2_last", now());
+      setSelected(null);
+      addLog("Galaxie réinitialisée.");
+      setNotif("Galaxie réinitialisée");
+    };
+
+    return (
+      <div className="w-full h-full relative select-none">
+        {/* Top bar */}
+        <div className="absolute top-3 left-3 right-3 flex items-center justify-between gap-4 z-40">
+          <div className="flex items-center gap-3">
+            <div className="text-2xl font-semibold text-cyan-300">🌌 La Galaxie Vivante — V2</div>
+            <div className="text-sm text-gray-300">Simulation autonome & asynchrone</div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button onClick={()=> applyFastForward(6)} className="px-3 py-1 bg-slate-700 rounded hover:bg-slate-600 text-sm">+6h</button>
+            <button onClick={()=> applyFastForward(24)} className="px-3 py-1 bg-amber-700 rounded hover:bg-amber-600 text-sm">+24h</button>
+            <button onClick={addSystem} className="px-3 py-1 bg-green-700 rounded hover:bg-green-600 text-sm">Ajouter système</button>
+            <button onClick={resetGalaxy} className="px-3 py-1 bg-red-700 rounded hover:bg-red-600 text-sm">Reset</button>
+          </div>
+        </div>
+
+        {/* Map */}
+        <GalaxyMap
+          galaxy={galaxy}
+          onSelect={handleSelect}
+          camera={camera}
+          setCamera={setCamera}
+          highlightedId={highlightedId}
+        />
+
+        {/* Right panel — selected info */}
+        <div className="absolute right-4 top-20 w-80 bg-black bg-opacity-60 p-3 rounded z-40">
+          <h3 className="font-bold text-cyan-200 mb-2">Fiche système</h3>
+          {!selected && <div className="text-sm text-gray-300">Clique sur une étoile pour voir ses infos</div>}
+          {selected && (
+            <div>
+              <div className="text-lg font-semibold">{selected.name}</div>
+              <div className="text-sm text-gray-300">Population: <span className="font-medium">{selected.population.toLocaleString()}</span></div>
+              <div className="text-sm text-gray-300">Technologie: <span className="font-medium">{selected.tech}</span></div>
+              <div className="text-sm text-gray-300">État: <span className="font-medium">{selected.status}</span></div>
+              <div className="text-xs text-gray-400 mt-2">{selected.lastEvent}</div>
+              <div className="flex gap-2 mt-3">
+                <button onClick={()=> {
+                  // send aid -> increases pop a bit
+                  setGalaxy(g => g.map(s => s.id === selected.id ? {...s, population: Math.floor(s.population * 1.08), lastEvent: "Aide interstellaire reçue"} : s));
+                  addLog(`Aide envoyée à ${selected.name}`);
+                  setNotif(`Aide envoyée à ${selected.name}`);
+                }} className="px-2 py-1 bg-blue-600 rounded text-sm">Envoyer aide</button>
+
+                <button onClick={()=> {
+                  // declare war -> set status
+                  setGalaxy(g => g.map(s => s.id === selected.id ? {...s, status: 'guerre', lastEvent: "Déclaré en guerre"} : s));
+                  addLog(`${selected.name} déclaré en guerre.`);
+                  setNotif(`${selected.name} en guerre`);
+                }} className="px-2 py-1 bg-red-600 rounded text-sm">Déclarer guerre</button>
+              </div>
+              <button onClick={()=> setSelected(null)} className="mt-3 text-xs text-gray-400">Fermer</button>
+            </div>
+          )}
+        </div>
+
+        {/* bottom-left journal */}
+        <div className="absolute bottom-4 left-4 z-40 w-96 bg-black bg-opacity-60 p-3 rounded journal" style={{ maxHeight: '40vh', overflowY:'auto' }}>
+          <div className="flex justify-between items-center mb-2">
+            <div className="font-semibold text-cyan-200">Journal Galactique</div>
+            <div className="text-xs text-gray-300">Événements récents</div>
+          </div>
+          <div className="text-xs text-gray-200">
+            {log.length === 0 && <div>Aucun événement encore.</div>}
+            {log.map((l,i)=> <div key={i} className="mb-1">• {l}</div>)}
+          </div>
+        </div>
+
+        {/* small notif */}
+        {notif && (
+          <div className="absolute top-14 right-6 z-50 notif bg-white bg-opacity-8 backdrop-blur-sm p-3 rounded text-sm">
+            {notif}
+          </div>
+        )}
+
+        {/* help hint */}
+        <div className="absolute bottom-4 right-4 z-40 bg-black bg-opacity-50 p-2 rounded text-xs">
+          <div>Zoom: roulette | Pan: glisser | Cliquer pour infos</div>
+        </div>
+      </div>
+    );
+  }
+
+  ReactDOM.render(<App />, document.getElementById('root'));
+  </script>
+</body>
+</html>
