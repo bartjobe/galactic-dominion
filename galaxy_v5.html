@@ -533,6 +533,51 @@ function PlanetPanel({ selectedStar, buildings, resources, onBuild }) {
     </div>
   );
 }
+/* ========== Affichage du HUD + panneau ========== */
+
+// Exemple de ressources initiales
+const [resources, setResources] = React.useState({
+  minerai: 100,
+  energie: 100,
+  cristal: 50,
+  science: 0,
+});
+
+// Exemple de bâtiments
+const [buildings, setBuildings] = React.useState({
+  mine: 0,
+  power: 0,
+  extractor: 0,
+  lab: 0,
+});
+
+// Fonction appelée quand on construit
+function handleBuild(type, cost) {
+  if (resources.minerai >= cost) {
+    setResources((r) => ({ ...r, minerai: r.minerai - cost }));
+    setBuildings((b) => ({ ...b, [type]: b[type] + 1 }));
+  }
+}
+
+// Exemple d’étoile sélectionnée (à relier plus tard)
+const [selectedStar, setSelectedStar] = React.useState({ name: "Terra Nova" });
+
+// Rendu visuel du HUD et panneau
+const App = () => (
+  <>
+    <HUD resources={resources} />
+    <PlanetPanel
+      selectedStar={selectedStar}
+      buildings={buildings}
+      resources={resources}
+      onBuild={handleBuild}
+    />
+  </>
+);
+
+// Lancement du jeu
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<App />);
 
   </script>
 </body>
