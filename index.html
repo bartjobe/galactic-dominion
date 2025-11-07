@@ -1,1105 +1,919 @@
 <!DOCTYPE html>
 <html lang="fr">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Galactic Dominion</title>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Galactic Dominion</title>
 
-    <!-- React + ReactDOM -->
-    <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
+  <!-- React 17 (compatible avec ReactDOM.render utilisé dans le code) -->
+  <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
 
-    <!-- Babel pour exécuter ton code JSX -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- Babel pour exécuter JSX directement dans le navigateur -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <!-- Tailwind si ton jeu l’utilise -->
-    <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Tailwind (optionnel, ton code l'utilise) -->
+  <script src="https://cdn.tailwindcss.com"></script>
 
-    <style>
-      html, body { margin: 0; height: 100%; background: black; color: white; }
-      #root { width: 100%; height: 100%; }
-    </style>
-  </head>
+  <style>
+    body { margin: 0; padding: 0; overflow-x: hidden; background: #0b1020; color: #fff; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
 
-  <body>
-    <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect } = React;
 
-    <!-- Ton code React -->
-    <script type="text/babel">
-import React, { useState, useEffect } from 'react';
-import { Rocket, Zap, Shield, Users, Swords, TrendingUp, AlertCircle, Globe, Star, Lock, Clock, Map, Sword } from 'lucide-react';
+    // ICÔNES SIMPLIFIÉES (remplacement de lucide-react)
+    const Icon = ({ type, size = 20, className = "" }) => {
+      const icons = {
+        rocket: "🚀",
+        zap: "⚡",
+        shield: "🛡️",
+        users: "👥",
+        swords: "⚔️",
+        trending: "📈",
+        alert: "⚠️",
+        globe: "🌍",
+        star: "⭐",
+        lock: "🔒",
+        clock: "⏰",
+        map: "🗺️"
+      };
+      return <span style={{ fontSize: `${size}px` }} className={className}>{icons[type] || "❓"}</span>;
+    };
 
-const GalacticDominion = () => {
-  const [gameState, setGameState] = useState('menu');
-  const [selectedRace, setSelectedRace] = useState(null);
-  const [playerName, setPlayerName] = useState('');
-  const [showPitch, setShowPitch] = useState(true);
-  
-  const [resources, setResources] = useState({
-    minerals: 500,
-    energy: 300,
-    crystals: 100
-  });
-  
-  const [totalVictories, setTotalVictories] = useState(0);
-  const [ancientArtifacts, setAncientArtifacts] = useState(0);
-  const [secretRaceUnlocked, setSecretRaceUnlocked] = useState(false);
-  const [showSecretDiscovery, setShowSecretDiscovery] = useState(false);
-  
-  const [buildings, setBuildings] = useState({
-    mineLevel: 1,
-    powerPlantLevel: 1,
-    crystalExtractorLevel: 1,
-    shipyardLevel: 1,
-    defenseLevel: 1
-  });
-  
-  const [buildQueue, setBuildQueue] = useState([]);
-  const [shipQueue, setShipQueue] = useState([]);
-  
-  const [sectors, setSectors] = useState([
-    { id: 1, name: 'Secteur Alpha', controlled: true, bonus: 'minerals', value: 1.1 },
-    { id: 2, name: 'Secteur Beta', controlled: false, bonus: 'energy', value: 1.15 },
-    { id: 3, name: 'Secteur Gamma', controlled: false, bonus: 'crystals', value: 1.2 },
-    { id: 4, name: 'Nébuleuse Oméga', controlled: false, bonus: 'all', value: 1.1 }
-  ]);
-  
-  const [commander, setCommander] = useState({
-    level: 1,
-    xp: 0,
-    xpToNext: 100,
-    skills: {
-      mining: 0,
-      combat: 0,
-      engineering: 0
-    }
-  });
-  
-  const [activeEvent, setActiveEvent] = useState(null);
-  
-  const [fleet, setFleet] = useState({
-    fighters: 5,
-    cruisers: 2,
-    battleships: 0,
-    carriers: 0
-  });
-  
-  const [enemyFleets, setEnemyFleets] = useState([]);
-  const [combatLog, setCombatLog] = useState([]);
-  const [selectedTab, setSelectedTab] = useState('overview');
-
-  const races = {
-    terran: {
-      name: "Terriens",
-      description: "Descendants de la Terre, ces explorateurs ont colonisé des centaines de mondes. Leur adaptabilité et leur ingéniosité font d'eux des adversaires redoutables.",
-      bonus: { energy: 1.2, fighters: 1.1, buildSpeed: 0.9 },
-      color: "#3b82f6",
-      icon: "🌍",
-      bgGradient: "from-blue-900 via-cyan-900 to-blue-800",
-      particles: "blue",
-      ambiance: "Stations orbitales scintillantes et vaisseaux de patrouille",
-      special: "Construction 10% plus rapide"
-    },
-    alien: {
-      name: "Xylons",
-      description: "Ancienne civilisation millénaire maîtrisant les cristaux énergétiques. Leurs technologies psioniques dépassent l'entendement humain.",
-      bonus: { crystals: 1.3, battleships: 1.15, commanderXP: 1.2 },
-      color: "#8b5cf6",
-      icon: "👽",
-      bgGradient: "from-purple-900 via-violet-900 to-purple-800",
-      particles: "purple",
-      ambiance: "Structures cristallines flottantes et énergie psionique",
-      special: "XP Commandant +20%"
-    },
-    ancient: {
-      name: "Précurseurs",
-      description: "Race mystérieuse disparue il y a des éons. Leurs technologies transcendent les lois de la physique. Seuls les plus dignes peuvent accéder à leur héritage.",
-      bonus: { minerals: 1.25, energy: 1.25, crystals: 1.25, fighters: 1.2, battleships: 1.2, buildSpeed: 0.8 },
-      color: "#fbbf24",
-      icon: "⚡",
-      bgGradient: "from-amber-900 via-yellow-900 to-orange-900",
-      particles: "gold",
-      ambiance: "Portails dimensionnels et artefacts luminescents",
-      special: "Tous les bonus + Construction 20% plus rapide",
-      secret: true
-    }
-  };
-
-  useEffect(() => {
-    if (buildQueue.length === 0 && shipQueue.length === 0) return;
-    
-    const interval = setInterval(() => {
-      if (buildQueue.length > 0) {
-        setBuildQueue(prev => {
-          const updated = [...prev];
-          updated[0].timeRemaining -= 1;
-          
-          if (updated[0].timeRemaining <= 0) {
-            setBuildings(b => ({...b, [updated[0].type]: b[updated[0].type] + 1}));
-            setCombatLog(l => [`✅ ${updated[0].name} amélioré!`, ...l].slice(0, 5));
-            return updated.slice(1);
-          }
-          return updated;
-        });
-      }
+    const GalacticDominion = () => {
+      const [gameState, setGameState] = useState('menu');
+      const [selectedRace, setSelectedRace] = useState(null);
+      const [playerName, setPlayerName] = useState('');
+      const [showPitch, setShowPitch] = useState(true);
       
-      if (shipQueue.length > 0) {
-        setShipQueue(prev => {
-          const updated = [...prev];
-          updated[0].timeRemaining -= 1;
-          
-          if (updated[0].timeRemaining <= 0) {
-            setFleet(f => ({...f, [updated[0].type]: f[updated[0].type] + 1}));
-            setCombatLog(l => [`🚀 ${updated[0].name} construit!`, ...l].slice(0, 5));
-            return updated.slice(1);
-          }
-          return updated;
-        });
-      }
-    }, 1000);
-    
-    return () => clearInterval(interval);
-  }, [buildQueue.length, shipQueue.length]);
-
-  useEffect(() => {
-    if (gameState !== 'game') return;
-    
-    const eventInterval = setInterval(() => {
-      const events = [
-        { 
-          type: 'bonus', 
-          title: '💫 Pluie de Météorites', 
-          desc: 'Des météorites riches tombent sur vos mines!',
-          effect: () => setResources(r => ({...r, minerals: r.minerals + 500}))
-        },
-        { 
-          type: 'bonus', 
-          title: '⚡ Tempête Solaire', 
-          desc: 'Vos centrales captent une énergie massive!',
-          effect: () => setResources(r => ({...r, energy: r.energy + 400}))
-        },
-        { 
-          type: 'malus', 
-          title: '🌪️ Anomalie Spatiale', 
-          desc: 'Une anomalie ralentit la construction (-30s)',
-          effect: () => {
-            setBuildQueue(q => q.map((b, i) => i === 0 ? {...b, timeRemaining: b.timeRemaining + 30} : b));
-            setShipQueue(q => q.map((s, i) => i === 0 ? {...s, timeRemaining: s.timeRemaining + 30} : s));
-          }
-        },
-        { 
-          type: 'bonus', 
-          title: '🎁 Artefact Découvert', 
-          desc: 'Vos explorateurs trouvent un artefact précieux!',
-          effect: () => setResources(r => ({...r, crystals: r.crystals + 200}))
-        }
-      ];
-      
-      if (Math.random() < 0.2 && !activeEvent) {
-        const event = events[Math.floor(Math.random() * events.length)];
-        setActiveEvent(event);
-        setTimeout(() => {
-          event.effect();
-          setActiveEvent(null);
-        }, 5000);
-      }
-    }, 30000);
-    
-    return () => clearInterval(eventInterval);
-  }, [gameState, activeEvent]);
-
-  useEffect(() => {
-    if (!secretRaceUnlocked && (totalVictories >= 10 || ancientArtifacts >= 3)) {
-      setSecretRaceUnlocked(true);
-      setShowSecretDiscovery(true);
-      setTimeout(() => setShowSecretDiscovery(false), 5000);
-    }
-  }, [totalVictories, ancientArtifacts, secretRaceUnlocked]);
-
-  useEffect(() => {
-    if (gameState !== 'game') return;
-    
-    const interval = setInterval(() => {
-      setResources(prev => {
-        const bonus = races[selectedRace].bonus;
-        const sectorBonus = sectors.filter(s => s.controlled).reduce((acc, s) => {
-          if (s.bonus === 'all') return { minerals: acc.minerals * s.value, energy: acc.energy * s.value, crystals: acc.crystals * s.value };
-          return { ...acc, [s.bonus]: (acc[s.bonus] || 1) * s.value };
-        }, { minerals: 1, energy: 1, crystals: 1 });
-        
-        const miningBonus = 1 + (commander.skills.mining * 0.05);
-        
-        return {
-          minerals: prev.minerals + buildings.mineLevel * 10 * (bonus.minerals || 1) * sectorBonus.minerals * miningBonus,
-          energy: prev.energy + buildings.powerPlantLevel * 8 * (bonus.energy || 1) * sectorBonus.energy,
-          crystals: prev.crystals + buildings.crystalExtractorLevel * 3 * (bonus.crystals || 1) * sectorBonus.crystals
-        };
+      const [resources, setResources] = useState({
+        minerals: 500,
+        energy: 300,
+        crystals: 100
       });
-    }, 3000);
-    
-    return () => clearInterval(interval);
-  }, [gameState, buildings, selectedRace, sectors, commander.skills.mining]);
-
-  useEffect(() => {
-    if (gameState !== 'game' || enemyFleets.length >= 3) return;
-    
-    const interval = setInterval(() => {
-      const hasArtifact = Math.random() < 0.15;
-      const controlsSector = Math.random() < 0.3;
-      const availableSectors = sectors.filter(s => !s.controlled);
-      const sector = controlsSector && availableSectors.length > 0 
-        ? availableSectors[Math.floor(Math.random() * availableSectors.length)]
-        : null;
       
-      const newEnemy = {
-        id: Date.now(),
-        name: `Flotte ${hasArtifact ? '⭐ Ancienne' : controlsSector ? '🎯 Contrôle' : 'Ennemie'} ${Math.floor(Math.random() * 1000)}`,
-        fighters: Math.floor(Math.random() * 15) + 5,
-        cruisers: Math.floor(Math.random() * 8) + 2,
-        battleships: Math.floor(Math.random() * 3),
-        hasArtifact,
-        sector,
-        rewards: {
-          minerals: Math.floor(Math.random() * 200) + 100,
-          energy: Math.floor(Math.random() * 150) + 50,
-          crystals: Math.floor(Math.random() * 50) + 25,
-          xp: Math.floor(Math.random() * 30) + 20
+      const [totalVictories, setTotalVictories] = useState(0);
+      const [ancientArtifacts, setAncientArtifacts] = useState(0);
+      const [secretRaceUnlocked, setSecretRaceUnlocked] = useState(false);
+      const [showSecretDiscovery, setShowSecretDiscovery] = useState(false);
+      
+      const [buildings, setBuildings] = useState({
+        mineLevel: 1,
+        powerPlantLevel: 1,
+        crystalExtractorLevel: 1,
+        shipyardLevel: 1,
+        defenseLevel: 1
+      });
+      
+      const [buildQueue, setBuildQueue] = useState([]);
+      const [shipQueue, setShipQueue] = useState([]);
+      
+      const [sectors, setSectors] = useState([
+        { id: 1, name: 'Secteur Alpha', controlled: true, bonus: 'minerals', value: 1.1 },
+        { id: 2, name: 'Secteur Beta', controlled: false, bonus: 'energy', value: 1.15 },
+        { id: 3, name: 'Secteur Gamma', controlled: false, bonus: 'crystals', value: 1.2 },
+        { id: 4, name: 'Nébuleuse Oméga', controlled: false, bonus: 'all', value: 1.1 }
+      ]);
+      
+      const [commander, setCommander] = useState({
+        level: 1,
+        xp: 0,
+        xpToNext: 100,
+        skills: {
+          mining: 0,
+          combat: 0,
+          engineering: 0
+        }
+      });
+      
+      const [activeEvent, setActiveEvent] = useState(null);
+      
+      const [fleet, setFleet] = useState({
+        fighters: 5,
+        cruisers: 2,
+        battleships: 0,
+        carriers: 0
+      });
+      
+      const [enemyFleets, setEnemyFleets] = useState([]);
+      const [combatLog, setCombatLog] = useState([]);
+      const [selectedTab, setSelectedTab] = useState('overview');
+
+      const races = {
+        terran: {
+          name: "Terriens",
+          description: "Descendants de la Terre, ces explorateurs ont colonisé des centaines de mondes.",
+          bonus: { energy: 1.2, fighters: 1.1, buildSpeed: 0.9 },
+          color: "#3b82f6",
+          icon: "🌍",
+          bgGradient: "from-blue-900 via-cyan-900 to-blue-800",
+          special: "Construction 10% plus rapide"
+        },
+        alien: {
+          name: "Xylons",
+          description: "Ancienne civilisation millénaire maîtrisant les cristaux énergétiques.",
+          bonus: { crystals: 1.3, battleships: 1.15, commanderXP: 1.2 },
+          color: "#8b5cf6",
+          icon: "👽",
+          bgGradient: "from-purple-900 via-violet-900 to-purple-800",
+          special: "XP Commandant +20%"
+        },
+        ancient: {
+          name: "Précurseurs",
+          description: "Race mystérieuse disparue il y a des éons. Leurs technologies transcendent les lois de la physique.",
+          bonus: { minerals: 1.25, energy: 1.25, crystals: 1.25, fighters: 1.2, battleships: 1.2, buildSpeed: 0.8 },
+          color: "#fbbf24",
+          icon: "⚡",
+          bgGradient: "from-amber-900 via-yellow-900 to-orange-900",
+          special: "Tous les bonus + Construction 20% plus rapide",
+          secret: true
         }
       };
-      
-      setEnemyFleets(prev => [...prev, newEnemy]);
-    }, 15000);
-    
-    return () => clearInterval(interval);
-  }, [gameState, enemyFleets.length, sectors]);
 
-  const Particles = ({ color }) => {
-    const particleCount = 30;
-    const particles = Array.from({ length: particleCount });
-    
-    return (
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        {particles.map((_, i) => {
-          const delay = Math.random() * 5;
-          const duration = 10 + Math.random() * 10;
-          const size = Math.random() * 3 + 1;
-          const startX = Math.random() * 100;
-          const startY = Math.random() * 100;
+      useEffect(() => {
+        if (buildQueue.length === 0 && shipQueue.length === 0) return;
+        
+        const interval = setInterval(() => {
+          if (buildQueue.length > 0) {
+            setBuildQueue(prev => {
+              const updated = [...prev];
+              updated[0].timeRemaining -= 1;
+              
+              if (updated[0].timeRemaining <= 0) {
+                setBuildings(b => ({...b, [updated[0].type]: b[updated[0].type] + 1}));
+                setCombatLog(l => [`✅ ${updated[0].name} amélioré!`, ...l].slice(0, 5));
+                return updated.slice(1);
+              }
+              return updated;
+            });
+          }
           
-          return (
-            <div
-              key={i}
-              className="absolute rounded-full opacity-30"
-              style={{
-                left: `${startX}%`,
-                top: `${startY}%`,
-                width: `${size}px`,
-                height: `${size}px`,
-                background: color === 'blue' ? '#3b82f6' : color === 'purple' ? '#8b5cf6' : '#fbbf24',
-                animation: `float ${duration}s ease-in-out ${delay}s infinite`,
-                boxShadow: `0 0 ${size * 2}px ${color === 'blue' ? '#3b82f6' : color === 'purple' ? '#8b5cf6' : '#fbbf24'}`
-              }}
-            />
-          );
-        })}
-        <style>{`
-          @keyframes float {
-            0%, 100% { transform: translateY(0) translateX(0); opacity: 0.2; }
-            50% { transform: translateY(-100px) translateX(50px); opacity: 0.6; }
+          if (shipQueue.length > 0) {
+            setShipQueue(prev => {
+              const updated = [...prev];
+              updated[0].timeRemaining -= 1;
+              
+              if (updated[0].timeRemaining <= 0) {
+                setFleet(f => ({...f, [updated[0].type]: f[updated[0].type] + 1}));
+                setCombatLog(l => [`🚀 ${updated[0].name} construit!`, ...l].slice(0, 5));
+                return updated.slice(1);
+              }
+              return updated;
+            });
           }
-        `}</style>
-      </div>
-    );
-  };
+        }, 1000);
+        
+        return () => clearInterval(interval);
+      }, [buildQueue.length, shipQueue.length]);
 
-  const AnimatedBackground = ({ race }) => {
-    if (!race) return null;
-    const raceData = races[race];
-    
-    return (
-      <div className="fixed inset-0 -z-10">
-        <div className={`absolute inset-0 bg-gradient-to-br ${raceData.bgGradient}`} />
-        <Particles color={raceData.particles} />
+      useEffect(() => {
+        if (gameState !== 'game') return;
         
-        <div 
-          className="absolute inset-0 opacity-10"
-          style={{
-            backgroundImage: `linear-gradient(${raceData.color} 1px, transparent 1px), linear-gradient(90deg, ${raceData.color} 1px, transparent 1px)`,
-            backgroundSize: '50px 50px'
-          }}
-        />
-        
-        <div className="absolute inset-0">
-          {Array.from({ length: 100 }).map((_, i) => (
-            <div
-              key={i}
-              className="absolute rounded-full bg-white"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                width: `${Math.random() * 2}px`,
-                height: `${Math.random() * 2}px`,
-                opacity: Math.random() * 0.5,
-                animation: `twinkle ${2 + Math.random() * 3}s ease-in-out infinite`
-              }}
-            />
-          ))}
-        </div>
-        
-        <style>{`
-          @keyframes twinkle {
-            0%, 100% { opacity: 0.2; }
-            50% { opacity: 0.8; }
+        const eventInterval = setInterval(() => {
+          const events = [
+            { 
+              type: 'bonus', 
+              title: '💫 Pluie de Météorites', 
+              desc: 'Des météorites riches tombent!',
+              effect: () => setResources(r => ({...r, minerals: r.minerals + 500}))
+            },
+            { 
+              type: 'bonus', 
+              title: '⚡ Tempête Solaire', 
+              desc: 'Énergie captée!',
+              effect: () => setResources(r => ({...r, energy: r.energy + 400}))
+            },
+            { 
+              type: 'malus', 
+              title: '🌪️ Anomalie Spatiale', 
+              desc: 'Construction ralentie',
+              effect: () => {
+                setBuildQueue(q => q.map((b, i) => i === 0 ? {...b, timeRemaining: b.timeRemaining + 30} : b));
+                setShipQueue(q => q.map((s, i) => i === 0 ? {...s, timeRemaining: s.timeRemaining + 30} : s));
+              }
+            }
+          ];
+          
+          if (Math.random() < 0.2 && !activeEvent) {
+            const event = events[Math.floor(Math.random() * events.length)];
+            setActiveEvent(event);
+            setTimeout(() => {
+              event.effect();
+              setActiveEvent(null);
+            }, 5000);
           }
-        `}</style>
-      </div>
-    );
-  };
+        }, 30000);
+        
+        return () => clearInterval(eventInterval);
+      }, [gameState, activeEvent]);
 
-  const upgradeSkill = (skill) => {
-    if (commander.level > commander.skills[skill]) {
-      setCommander(prev => ({
-        ...prev,
-        skills: { ...prev.skills, [skill]: prev.skills[skill] + 1 }
-      }));
-      setCombatLog(l => [`📈 Compétence ${skill} améliorée!`, ...l].slice(0, 5));
-    }
-  };
-
-  const conquestSector = (sectorId) => {
-    setSectors(prev => prev.map(s => 
-      s.id === sectorId ? {...s, controlled: true} : s
-    ));
-    setCombatLog(l => [`🎯 Secteur conquis!`, ...l].slice(0, 5));
-  };
-
-  const attackEnemy = (enemy) => {
-    const bonus = races[selectedRace].bonus;
-    const combatBonus = 1 + (commander.skills.combat * 0.1);
-    
-    const playerPower = (
-      fleet.fighters * 10 * (bonus.fighters || 1) + 
-      fleet.cruisers * 30 + 
-      fleet.battleships * 80 * (bonus.battleships || 1) + 
-      fleet.carriers * 150
-    ) * combatBonus;
-      
-    const enemyPower = 
-      enemy.fighters * 10 + 
-      enemy.cruisers * 30 + 
-      enemy.battleships * 80;
-    
-    const playerLosses = {
-      fighters: Math.floor(fleet.fighters * (enemyPower / (playerPower + enemyPower)) * 0.5),
-      cruisers: Math.floor(fleet.cruisers * (enemyPower / (playerPower + enemyPower)) * 0.3),
-      battleships: Math.floor(fleet.battleships * (enemyPower / (playerPower + enemyPower)) * 0.2),
-      carriers: Math.floor(fleet.carriers * (enemyPower / (playerPower + enemyPower)) * 0.1)
-    };
-    
-    if (playerPower > enemyPower) {
-      setFleet(prev => ({
-        fighters: Math.max(0, prev.fighters - playerLosses.fighters),
-        cruisers: Math.max(0, prev.cruisers - playerLosses.cruisers),
-        battleships: Math.max(0, prev.battleships - playerLosses.battleships),
-        carriers: Math.max(0, prev.carriers - playerLosses.carriers)
-      }));
-      
-      setResources(prev => ({
-        minerals: prev.minerals + enemy.rewards.minerals,
-        energy: prev.energy + enemy.rewards.energy,
-        crystals: prev.crystals + enemy.rewards.crystals
-      }));
-      
-      const xpGain = enemy.rewards.xp * (races[selectedRace].bonus.commanderXP || 1);
-      setCommander(prev => {
-        const newXP = prev.xp + xpGain;
-        if (newXP >= prev.xpToNext) {
-          setCombatLog(l => [`🌟 Commandant niveau ${prev.level + 1}!`, ...l].slice(0, 5));
-          return {
-            ...prev,
-            level: prev.level + 1,
-            xp: newXP - prev.xpToNext,
-            xpToNext: Math.floor(prev.xpToNext * 1.5)
-          };
+      useEffect(() => {
+        if (!secretRaceUnlocked && (totalVictories >= 10 || ancientArtifacts >= 3)) {
+          setSecretRaceUnlocked(true);
+          setShowSecretDiscovery(true);
+          setTimeout(() => setShowSecretDiscovery(false), 5000);
         }
-        return { ...prev, xp: newXP };
-      });
-      
-      setTotalVictories(prev => prev + 1);
-      
-      if (enemy.hasArtifact) {
-        setAncientArtifacts(prev => prev + 1);
-        setCombatLog(prev => [`⭐ ARTEFACT ANCIEN DÉCOUVERT! (${ancientArtifacts + 1}/3)`, ...prev].slice(0, 5));
-      }
-      
-      if (enemy.sector) {
-        conquestSector(enemy.sector.id);
-      }
-      
-      setCombatLog(prev => [`VICTOIRE! +${enemy.rewards.minerals}M +${enemy.rewards.energy}E +${enemy.rewards.crystals}C +${Math.floor(xpGain)}XP`, ...prev].slice(0, 5));
-      setEnemyFleets(prev => prev.filter(e => e.id !== enemy.id));
-    } else {
-      setFleet(prev => ({
-        fighters: Math.max(0, prev.fighters - playerLosses.fighters * 2),
-        cruisers: Math.max(0, prev.cruisers - playerLosses.cruisers * 2),
-        battleships: Math.max(0, prev.battleships - playerLosses.battleships * 2),
-        carriers: Math.max(0, prev.carriers - playerLosses.carriers * 2)
-      }));
-      
-      setCombatLog(prev => [`DÉFAITE. Pertes importantes!`, ...prev].slice(0, 5));
-    }
-  };
+      }, [totalVictories, ancientArtifacts, secretRaceUnlocked]);
 
-  const buildBuilding = (type) => {
-    const buildings_data = {
-      mineLevel: { name: 'Mine de Minéraux', icon: '⛏️', cost: { minerals: 100, energy: 50 }, time: 60 },
-      powerPlantLevel: { name: 'Centrale Énergétique', icon: '⚡', cost: { minerals: 80, energy: 40 }, time: 50 },
-      crystalExtractorLevel: { name: 'Extracteur de Cristaux', icon: '💎', cost: { minerals: 150, energy: 100, crystals: 50 }, time: 90 },
-      shipyardLevel: { name: 'Chantier Spatial', icon: '🏭', cost: { minerals: 200, energy: 150, crystals: 100 }, time: 120 },
-      defenseLevel: { name: 'Défenses Planétaires', icon: '🛡️', cost: { minerals: 180, energy: 120, crystals: 80 }, time: 80 }
-    };
-    
-    const building = buildings_data[type];
-    const currentLevel = buildings[type];
-    const adjustedCost = {
-      minerals: Math.floor(building.cost.minerals * Math.pow(1.5, currentLevel)),
-      energy: Math.floor(building.cost.energy * Math.pow(1.5, currentLevel)),
-      crystals: building.cost.crystals ? Math.floor(building.cost.crystals * Math.pow(1.5, currentLevel)) : 0
-    };
-    
-    const buildTime = Math.floor(building.time * Math.pow(1.3, currentLevel) * (races[selectedRace].bonus.buildSpeed || 1) * (1 - commander.skills.engineering * 0.05));
-    
-    if (resources.minerals >= adjustedCost.minerals && 
-        resources.energy >= adjustedCost.energy && 
-        resources.crystals >= adjustedCost.crystals) {
-      setResources(prev => ({
-        minerals: prev.minerals - adjustedCost.minerals,
-        energy: prev.energy - adjustedCost.energy,
-        crystals: prev.crystals - adjustedCost.crystals
-      }));
-      
-      setBuildQueue(prev => [...prev, {
-        type,
-        name: building.name,
-        timeRemaining: buildTime,
-        totalTime: buildTime
-      }]);
-    }
-  };
-
-  const buildShip = (type) => {
-    const shipCosts = {
-      fighters: { name: 'Chasseur', minerals: 50, energy: 30, time: 30 },
-      cruisers: { name: 'Croiseur', minerals: 150, energy: 100, crystals: 50, time: 60 },
-      battleships: { name: 'Cuirassé', minerals: 400, energy: 300, crystals: 200, time: 120 },
-      carriers: { name: 'Porte-vaisseaux', minerals: 800, energy: 600, crystals: 400, time: 180 }
-    };
-    
-    const ship = shipCosts[type];
-    const buildTime = Math.floor(ship.time * (races[selectedRace].bonus.buildSpeed || 1) * (1 - commander.skills.engineering * 0.05));
-    
-    if (resources.minerals >= ship.minerals && 
-        resources.energy >= ship.energy && 
-        (!ship.crystals || resources.crystals >= ship.crystals)) {
-      setResources(prev => ({
-        minerals: prev.minerals - ship.minerals,
-        energy: prev.energy - ship.energy,
-        crystals: prev.crystals - (ship.crystals || 0)
-      }));
-      
-      setShipQueue(prev => [...prev, {
-        type,
-        name: ship.name,
-        timeRemaining: buildTime,
-        totalTime: buildTime
-      }]);
-    }
-  };
-
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  if (gameState === 'menu') {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-900 via-blue-900 to-purple-900 flex items-center justify-center p-4 relative overflow-hidden">
-        <AnimatedBackground race="terran" />
+      useEffect(() => {
+        if (gameState !== 'game') return;
         
-        <div className="max-w-2xl w-full">
-          {showPitch && (
-            <div className="bg-black bg-opacity-80 backdrop-blur-sm rounded-lg shadow-2xl p-8 mb-6 border-2 border-blue-500">
-              <div className="flex justify-between items-start mb-4">
-                <h2 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">
-                  📜 Chroniques Galactiques
-                </h2>
-                <button 
-                  onClick={() => setShowPitch(false)}
-                  className="text-gray-400 hover:text-white"
+        const interval = setInterval(() => {
+          setResources(prev => {
+            const bonus = races[selectedRace].bonus;
+            const sectorBonus = sectors.filter(s => s.controlled).reduce((acc, s) => {
+              if (s.bonus === 'all') return { minerals: acc.minerals * s.value, energy: acc.energy * s.value, crystals: acc.crystals * s.value };
+              return { ...acc, [s.bonus]: (acc[s.bonus] || 1) * s.value };
+            }, { minerals: 1, energy: 1, crystals: 1 });
+            
+            const miningBonus = 1 + (commander.skills.mining * 0.05);
+            
+            return {
+              minerals: prev.minerals + buildings.mineLevel * 10 * (bonus.minerals || 1) * sectorBonus.minerals * miningBonus,
+              energy: prev.energy + buildings.powerPlantLevel * 8 * (bonus.energy || 1) * sectorBonus.energy,
+              crystals: prev.crystals + buildings.crystalExtractorLevel * 3 * (bonus.crystals || 1) * sectorBonus.crystals
+            };
+          });
+        }, 3000);
+        
+        return () => clearInterval(interval);
+      }, [gameState, buildings, selectedRace, sectors, commander.skills.mining]);
+
+      useEffect(() => {
+        if (gameState !== 'game' || enemyFleets.length >= 3) return;
+        
+        const interval = setInterval(() => {
+          const hasArtifact = Math.random() < 0.15;
+          const controlsSector = Math.random() < 0.3;
+          const availableSectors = sectors.filter(s => !s.controlled);
+          const sector = controlsSector && availableSectors.length > 0 
+            ? availableSectors[Math.floor(Math.random() * availableSectors.length)]
+            : null;
+          
+          const newEnemy = {
+            id: Date.now(),
+            name: `Flotte ${hasArtifact ? '⭐' : controlsSector ? '🎯' : ''} ${Math.floor(Math.random() * 1000)}`,
+            fighters: Math.floor(Math.random() * 15) + 5,
+            cruisers: Math.floor(Math.random() * 8) + 2,
+            battleships: Math.floor(Math.random() * 3),
+            hasArtifact,
+            sector,
+            rewards: {
+              minerals: Math.floor(Math.random() * 200) + 100,
+              energy: Math.floor(Math.random() * 150) + 50,
+              crystals: Math.floor(Math.random() * 50) + 25,
+              xp: Math.floor(Math.random() * 30) + 20
+            }
+          };
+          
+          setEnemyFleets(prev => [...prev, newEnemy]);
+        }, 15000);
+        
+        return () => clearInterval(interval);
+      }, [gameState, enemyFleets.length, sectors]);
+
+      const upgradeSkill = (skill) => {
+        const totalSkills = commander.skills.mining + commander.skills.combat + commander.skills.engineering;
+        if (commander.level > totalSkills) {
+          setCommander(prev => ({
+            ...prev,
+            skills: { ...prev.skills, [skill]: prev.skills[skill] + 1 }
+          }));
+          setCombatLog(l => [`📈 ${skill} amélioré!`, ...l].slice(0, 5));
+        }
+      };
+
+      const conquestSector = (sectorId) => {
+        setSectors(prev => prev.map(s => 
+          s.id === sectorId ? {...s, controlled: true} : s
+        ));
+        setCombatLog(l => [`🎯 Secteur conquis!`, ...l].slice(0, 5));
+      };
+
+      const attackEnemy = (enemy) => {
+        const bonus = races[selectedRace].bonus;
+        const combatBonus = 1 + (commander.skills.combat * 0.1);
+        
+        const playerPower = (
+          fleet.fighters * 10 * (bonus.fighters || 1) + 
+          fleet.cruisers * 30 + 
+          fleet.battleships * 80 * (bonus.battleships || 1) + 
+          fleet.carriers * 150
+        ) * combatBonus;
+          
+        const enemyPower = 
+          enemy.fighters * 10 + 
+          enemy.cruisers * 30 + 
+          enemy.battleships * 80;
+        
+        const playerLosses = {
+          fighters: Math.floor(fleet.fighters * (enemyPower / (playerPower + enemyPower)) * 0.5),
+          cruisers: Math.floor(fleet.cruisers * (enemyPower / (playerPower + enemyPower)) * 0.3),
+          battleships: Math.floor(fleet.battleships * (enemyPower / (playerPower + enemyPower)) * 0.2),
+          carriers: Math.floor(fleet.carriers * (enemyPower / (playerPower + enemyPower)) * 0.1)
+        };
+        
+        if (playerPower > enemyPower) {
+          setFleet(prev => ({
+            fighters: Math.max(0, prev.fighters - playerLosses.fighters),
+            cruisers: Math.max(0, prev.cruisers - playerLosses.cruisers),
+            battleships: Math.max(0, prev.battleships - playerLosses.battleships),
+            carriers: Math.max(0, prev.carriers - playerLosses.carriers)
+          }));
+          
+          setResources(prev => ({
+            minerals: prev.minerals + enemy.rewards.minerals,
+            energy: prev.energy + enemy.rewards.energy,
+            crystals: prev.crystals + enemy.rewards.crystals
+          }));
+          
+          const xpGain = enemy.rewards.xp * (races[selectedRace].bonus.commanderXP || 1);
+          setCommander(prev => {
+            const newXP = prev.xp + xpGain;
+            if (newXP >= prev.xpToNext) {
+              setCombatLog(l => [`🌟 Niveau ${prev.level + 1}!`, ...l].slice(0, 5));
+              return {
+                ...prev,
+                level: prev.level + 1,
+                xp: newXP - prev.xpToNext,
+                xpToNext: Math.floor(prev.xpToNext * 1.5)
+              };
+            }
+            return { ...prev, xp: newXP };
+          });
+          
+          setTotalVictories(prev => prev + 1);
+          
+          if (enemy.hasArtifact) {
+            setAncientArtifacts(prev => prev + 1);
+            setCombatLog(prev => [`⭐ ARTEFACT! (${ancientArtifacts + 1}/3)`, ...prev].slice(0, 5));
+          }
+          
+          if (enemy.sector) {
+            conquestSector(enemy.sector.id);
+          }
+          
+          setCombatLog(prev => [`VICTOIRE! +${enemy.rewards.minerals}M`, ...prev].slice(0, 5));
+          setEnemyFleets(prev => prev.filter(e => e.id !== enemy.id));
+        } else {
+          setFleet(prev => ({
+            fighters: Math.max(0, prev.fighters - playerLosses.fighters * 2),
+            cruisers: Math.max(0, prev.cruisers - playerLosses.cruisers * 2),
+            battleships: Math.max(0, prev.battleships - playerLosses.battleships * 2),
+            carriers: Math.max(0, prev.carriers - playerLosses.carriers * 2)
+          }));
+          
+          setCombatLog(prev => [`DÉFAITE!`, ...prev].slice(0, 5));
+        }
+      };
+
+      const buildBuilding = (type) => {
+        const buildings_data = {
+          mineLevel: { name: 'Mine', cost: { minerals: 100, energy: 50 }, time: 60 },
+          powerPlantLevel: { name: 'Centrale', cost: { minerals: 80, energy: 40 }, time: 50 },
+          crystalExtractorLevel: { name: 'Extracteur', cost: { minerals: 150, energy: 100, crystals: 50 }, time: 90 },
+          shipyardLevel: { name: 'Chantier', cost: { minerals: 200, energy: 150, crystals: 100 }, time: 120 },
+          defenseLevel: { name: 'Défense', cost: { minerals: 180, energy: 120, crystals: 80 }, time: 80 }
+        };
+        
+        const building = buildings_data[type];
+        const currentLevel = buildings[type];
+        const adjustedCost = {
+          minerals: Math.floor(building.cost.minerals * Math.pow(1.5, currentLevel)),
+          energy: Math.floor(building.cost.energy * Math.pow(1.5, currentLevel)),
+          crystals: building.cost.crystals ? Math.floor(building.cost.crystals * Math.pow(1.5, currentLevel)) : 0
+        };
+        
+        const buildTime = Math.floor(building.time * Math.pow(1.3, currentLevel) * (races[selectedRace].bonus.buildSpeed || 1) * (1 - commander.skills.engineering * 0.05));
+        
+        if (resources.minerals >= adjustedCost.minerals && 
+            resources.energy >= adjustedCost.energy && 
+            resources.crystals >= adjustedCost.crystals) {
+          setResources(prev => ({
+            minerals: prev.minerals - adjustedCost.minerals,
+            energy: prev.energy - adjustedCost.energy,
+            crystals: prev.crystals - adjustedCost.crystals
+          }));
+          
+          setBuildQueue(prev => [...prev, {
+            type,
+            name: building.name,
+            timeRemaining: buildTime,
+            totalTime: buildTime
+          }]);
+        }
+      };
+
+      const buildShip = (type) => {
+        const shipCosts = {
+          fighters: { name: 'Chasseur', minerals: 50, energy: 30, time: 30 },
+          cruisers: { name: 'Croiseur', minerals: 150, energy: 100, crystals: 50, time: 60 },
+          battleships: { name: 'Cuirassé', minerals: 400, energy: 300, crystals: 200, time: 120 },
+          carriers: { name: 'Porte-vaisseaux', minerals: 800, energy: 600, crystals: 400, time: 180 }
+        };
+        
+        const ship = shipCosts[type];
+        const buildTime = Math.floor(ship.time * (races[selectedRace].bonus.buildSpeed || 1) * (1 - commander.skills.engineering * 0.05));
+        
+        if (resources.minerals >= ship.minerals && 
+            resources.energy >= ship.energy && 
+            (!ship.crystals || resources.crystals >= ship.crystals)) {
+          setResources(prev => ({
+            minerals: prev.minerals - ship.minerals,
+            energy: prev.energy - ship.energy,
+            crystals: prev.crystals - (ship.crystals || 0)
+          }));
+          
+          setShipQueue(prev => [...prev, {
+            type,
+            name: ship.name,
+            timeRemaining: buildTime,
+            totalTime: buildTime
+          }]);
+        }
+      };
+
+      const formatTime = (seconds) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+      };
+
+      // MENU
+      if (gameState === 'menu') {
+        return (
+          <div className="min-h-screen bg-gradient-to-b from-gray-900 via-blue-900 to-purple-900 flex items-center justify-center p-4">
+            <div className="max-w-2xl w-full">
+              {showPitch && (
+                <div className="bg-black bg-opacity-80 rounded-lg p-8 mb-6 border-2 border-blue-500">
+                  <div className="flex justify-between items-start mb-4">
+                    <h2 className="text-2xl font-bold text-blue-400">📜 Chroniques Galactiques</h2>
+                    <button onClick={() => setShowPitch(false)} className="text-gray-400">✕</button>
+                  </div>
+                  <div className="text-gray-300 space-y-3 text-sm">
+                    <p><span className="text-blue-400 font-semibold">An 3247.</span> La galaxie est en chaos.</p>
+                    <p>Les <span className="text-blue-400">Terriens</span> et les <span className="text-purple-400">Xylons</span> se disputent les ressources.</p>
+                    <p>Mais une <span className="text-yellow-400">troisième race</span> attend d'être découverte...</p>
+                  </div>
+                </div>
+              )}
+              
+              <div className="bg-black bg-opacity-80 rounded-lg p-8 border-2 border-blue-500">
+                <h1 className="text-5xl font-bold text-center bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent mb-4">
+                  GALACTIC DOMINION
+                </h1>
+                
+                <input
+                  type="text"
+                  placeholder="Nom de commandant"
+                  value={playerName}
+                  onChange={(e) => setPlayerName(e.target.value)}
+                  className="w-full p-4 mb-6 bg-gray-900 text-white rounded-lg border-2 border-gray-700 focus:border-blue-500 outline-none"
+                />
+                
+                <button
+                  onClick={() => playerName.trim() && setGameState('raceSelect')}
+                  disabled={!playerName.trim()}
+                  className="w-full py-4 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg font-bold text-lg hover:from-blue-600 hover:to-purple-600 disabled:opacity-50"
                 >
-                  ✕
+                  ⚔️ Commencer
                 </button>
               </div>
-              <div className="text-gray-300 space-y-3 text-sm leading-relaxed">
-                <p>
-                  <span className="text-blue-400 font-semibold">An 3247.</span> La galaxie est en proie au chaos. 
-                  Deux civilisations majeures se disputent les ressources rares qui parsèment l'espace infini.
-                </p>
-                <p>
-                  Les <span className="text-blue-400">Terriens</span>, ingénieux et résilients, ont bâti un empire 
-                  sur l'innovation technologique. Les <span className="text-purple-400">Xylons</span>, ancienne race 
-                  psionique, maîtrisent les mystérieux cristaux énergétiques.
-                </p>
-                <p>
-                  Mais les légendes parlent d'une <span className="text-yellow-400">troisième race</span>... 
-                  Les <span className="text-yellow-400 font-semibold">Précurseurs</span>, disparus depuis des millénaires, 
-                  dont la technologie transcende toute compréhension.
-                </p>
-                <div className="bg-gradient-to-r from-blue-900 to-purple-900 p-4 rounded-lg mt-4 border border-blue-500">
-                  <p className="text-yellow-400 font-semibold mb-2">🎮 Mécaniques Uniques :</p>
-                  <ul className="text-xs space-y-1 text-gray-300">
-                    <li>⏱️ <strong>Temps réel</strong> : Construction et production en temps réel</li>
-                    <li>🗺️ <strong>Conquête de secteurs</strong> : Contrôlez des territoires pour des bonus</li>
-                    <li>👤 <strong>Système de commandant</strong> : Faites évoluer votre héros</li>
-                    <li>⚡ <strong>Événements dynamiques</strong> : Opportunités et défis aléatoires</li>
-                  </ul>
-                </div>
-              </div>
             </div>
-          )}
-          
-          <div className="bg-black bg-opacity-80 backdrop-blur-sm rounded-lg shadow-2xl p-8 border-2 border-blue-500">
-            <div className="text-center mb-8">
-              <h1 className="text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 mb-2">
-                GALACTIC DOMINION
-              </h1>
-              <p className="text-gray-400">Forgez votre empire parmi les étoiles</p>
-            </div>
-            
-            <input
-              type="text"
-              placeholder="Entrez votre nom de commandant"
-              value={playerName}
-              onChange={(e) => setPlayerName(e.target.value)}
-              className="w-full p-4 mb-6 bg-gray-900 bg-opacity-70 text-white rounded-lg border-2 border-gray-700 focus:border-blue-500 focus:outline-none transition"
-            />
-            
-            <button
-              onClick={() => playerName.trim() && setGameState('raceSelect')}
-              disabled={!playerName.trim()}
-              className="w-full py-4 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 text-white rounded-lg font-bold text-lg hover:from-blue-600 hover:via-purple-600 hover:to-pink-600 disabled:opacity-50 disabled:cursor-not-allowed transition transform hover:scale-105"
-            >
-              ⚔️ Commencer l'Aventure
-            </button>
           </div>
-        </div>
-      </div>
-    );
-  }
+        );
+      }
 
-  if (gameState === 'raceSelect') {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-900 via-blue-900 to-purple-900 flex items-center justify-center p-4 relative overflow-hidden">
-        <AnimatedBackground race="terran" />
-        
-        <div className="max-w-5xl w-full relative z-10">
-          <h2 className="text-4xl font-bold text-center text-white mb-2">Choisissez Votre Civilisation</h2>
-          <p className="text-center text-gray-400 mb-8">Chaque race possède ses propres forces et stratégies</p>
-          
-          <div className="grid md:grid-cols-3 gap-6">
-            {Object.entries(races).map(([key, race]) => {
-              const isLocked = race.secret && !secretRaceUnlocked;
+      // SÉLECTION RACE
+      if (gameState === 'raceSelect') {
+        return (
+          <div className="min-h-screen bg-gradient-to-b from-gray-900 via-blue-900 to-purple-900 flex items-center justify-center p-4">
+            <div className="max-w-5xl w-full">
+              <h2 className="text-4xl font-bold text-center text-white mb-8">Choisissez Votre Civilisation</h2>
               
-              return (
-                <div
-                  key={key}
-                  onClick={() => !isLocked && (setSelectedRace(key), setGameState('game'))}
-                  className={`bg-black bg-opacity-80 backdrop-blur-sm rounded-xl p-6 border-2 transition-all duration-300 ${
-                    isLocked 
-                      ? 'opacity-50 cursor-not-allowed' 
-                      : 'cursor-pointer hover:scale-105 hover:shadow-2xl'
-                  }`}
-                  style={{ borderColor: isLocked ? '#666' : race.color }}
-                >
-                  <div className="relative">
-                    {isLocked && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60 rounded-lg z-10">
-                        <Lock size={48} className="text-gray-400" />
-                      </div>
-                    )}
-                    
-                    <div className="text-7xl text-center mb-4 filter drop-shadow-lg">
-                      {race.icon}
+              <div className="grid md:grid-cols-3 gap-6">
+                {Object.entries(races).map(([key, race]) => {
+                  const isLocked = race.secret && !secretRaceUnlocked;
+                  
+                  return (
+                    <div
+                      key={key}
+                      onClick={() => !isLocked && (setSelectedRace(key), setGameState('game'))}
+                      className={`bg-black bg-opacity-80 rounded-xl p-6 border-2 transition ${isLocked ? 'opacity-50' : 'cursor-pointer hover:scale-105'}`}
+                      style={{ borderColor: isLocked ? '#666' : race.color }}
+                    >
+                      {isLocked && (
+                        <div className="text-center">
+                          <div className="text-6xl mb-4">🔒</div>
+                          <p className="text-yellow-400 font-semibold">Race Secrète</p>
+                          <p className="text-xs text-gray-400 mt-2">{totalVictories}/10 victoires | {ancientArtifacts}/3 artefacts</p>
+                        </div>
+                      )}
+                      {!isLocked && (
+                        <>
+                          <div className="text-7xl text-center mb-4">{race.icon}</div>
+                          <h3 className="text-3xl font-bold text-center mb-3" style={{ color: race.color }}>{race.name}</h3>
+                          <p className="text-gray-300 text-center text-sm mb-4">{race.description}</p>
+                          <div className="bg-gray-900 rounded-lg p-3">
+                            <p className="text-yellow-400 text-center text-sm">⚡ {race.special}</p>
+                          </div>
+                        </>
+                      )}
                     </div>
-                    <h3 className="text-3xl font-bold text-center mb-3" style={{ color: race.color }}>
-                      {race.name}
-                    </h3>
-                    <p className="text-gray-300 text-center mb-4 text-sm leading-relaxed min-h-[80px]">
-                      {race.description}
-                    </p>
-                    
-                    {!isLocked && (
-                      <>
-                        <div className="text-xs text-gray-400 mb-2 italic text-center">
-                          {race.ambiance}
-                        </div>
-                        <div className="bg-gray-900 bg-opacity-50 rounded-lg p-3 mt-4">
-                          <p className="font-semibold mb-2 text-center text-yellow-400">
-                            ⚡ {race.special}
-                          </p>
-                        </div>
-                      </>
-                    )}
-                    
-                    {isLocked && (
-                      <div className="text-center mt-4 text-yellow-400 text-sm">
-                        <p className="font-semibold mb-1">🔒 Race Secrète</p>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      const EventNotif = () => activeEvent && (
+        <div className="fixed top-4 right-4 z-40">
+          <div className={`${activeEvent.type === 'bonus' ? 'bg-green-900' : 'bg-red-900'} p-4 rounded-lg border-2 max-w-xs`}>
+            <h3 className="font-bold text-white">{activeEvent.title}</h3>
+            <p className="text-sm text-gray-200">{activeEvent.desc}</p>
+          </div>
+        </div>
+      );
+
+      const SecretNotif = () => showSecretDiscovery && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-70">
+          <div className="bg-gradient-to-br from-yellow-900 to-amber-900 p-8 rounded-2xl border-4 border-yellow-400 max-w-md">
+            <div className="text-center">
+              <div className="text-6xl mb-4">⚡</div>
+              <h2 className="text-3xl font-bold text-yellow-300 mb-4">DÉCOUVERTE!</h2>
+              <p className="text-4xl font-bold text-white">LES PRÉCURSEURS</p>
+            </div>
+          </div>
+        </div>
+      );
+
+      return (
+        <div className="min-h-screen text-white p-2 sm:p-4 bg-gradient-to-b" style={{ background: `linear-gradient(to bottom, #1a202c, #2d3748, #1a202c)` }}>
+          <EventNotif />
+          <SecretNotif />
+          
+          <div className="max-w-6xl mx-auto">
+            {/* HEADER */}
+            <div className="bg-black bg-opacity-70 rounded-xl p-4 mb-4 border-2" style={{ borderColor: races[selectedRace].color }}>
+              <div className="flex justify-between items-center mb-4">
+                <div>
+                  <h1 className="text-2xl font-bold">{playerName} {races[selectedRace].icon}</h1>
+                  <p className="text-sm" style={{ color: races[selectedRace].color }}>{races[selectedRace].name}</p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Niv.{commander.level} | {commander.xp}/{commander.xpToNext}XP | 🏆{totalVictories} | ⭐{ancientArtifacts}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-3 gap-2">
+                <div className="bg-gray-900 p-2 rounded border border-blue-500">
+                  <div className="text-xs text-gray-400">Minéraux</div>
+                  <div className="font-bold text-blue-400">{Math.floor(resources.minerals)}</div>
+                </div>
+                <div className="bg-gray-900 p-2 rounded border border-yellow-500">
+                  <div className="text-xs text-gray-400">Énergie</div>
+                  <div className="font-bold text-yellow-400">{Math.floor(resources.energy)}</div>
+                </div>
+                <div className="bg-gray-900 p-2 rounded border border-purple-500">
+                  <div className="text-xs text-gray-400">Cristaux</div>
+                  <div className="font-bold text-purple-400">{Math.floor(resources.crystals)}</div>
+                </div>
+              </div>
+
+              {/* FILES */}
+              {(buildQueue.length > 0 || shipQueue.length > 0) && (
+                <div className="mt-4 space-y-2">
+                  {buildQueue.slice(0,2).map((item, i
+) => (
+                    <div key={i} className="bg-gray-900 p-2 rounded flex justify-between text-xs">
+                      <span>🏗️ {item.name}</span>
+                      <span className="text-yellow-400">⏰ {formatTime(item.timeRemaining)}</span>
+                    </div>
+                  ))}
+                  {shipQueue.slice(0,2).map((item, i) => (
+                    <div key={i} className="bg-gray-900 p-2 rounded flex justify-between text-xs">
+                      <span>🚀 {item.name}</span>
+                      <span className="text-green-400">⏰ {formatTime(item.timeRemaining)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* TABS */}
+            <div className="flex gap-2 mb-4 overflow-x-auto">
+              {['overview', 'commander', 'sectors', 'buildings', 'fleet', 'combat'].map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => setSelectedTab(tab)}
+                  className={`px-3 py-2 rounded-lg whitespace-nowrap text-sm ${
+                    selectedTab === tab ? 'bg-opacity-90' : 'bg-black bg-opacity-50'
+                  }`}
+                  style={{ 
+                    backgroundColor: selectedTab === tab ? races[selectedRace].color : undefined,
+                    borderWidth: '2px',
+                    borderColor: selectedTab === tab ? races[selectedRace].color : 'transparent'
+                  }}
+                >
+                  {tab === 'overview' && '🏠'}
+                  {tab === 'commander' && '👤'}
+                  {tab === 'sectors' && '🗺️'}
+                  {tab === 'buildings' && '🏗️'}
+                  {tab === 'fleet' && '🚀'}
+                  {tab === 'combat' && '⚔️'}
+                </button>
+              ))}
+            </div>
+
+            {/* OVERVIEW */}
+            {selectedTab === 'overview' && (
+              <div className="space-y-4">
+                <div className="bg-black bg-opacity-70 rounded-xl p-4 border-2 border-gray-700">
+                  <h3 className="font-bold mb-2">📈 Production (par 3s)</h3>
+                  <div className="grid grid-cols-3 gap-2 text-sm">
+                    <div>Min: +{Math.floor(buildings.mineLevel * 10 * (races[selectedRace].bonus.minerals || 1))}</div>
+                    <div>Ene: +{Math.floor(buildings.powerPlantLevel * 8 * (races[selectedRace].bonus.energy || 1))}</div>
+                    <div>Cri: +{Math.floor(buildings.crystalExtractorLevel * 3 * (races[selectedRace].bonus.crystals || 1))}</div>
+                  </div>
+                </div>
+
+                <div className="bg-black bg-opacity-70 rounded-xl p-4 border-2 border-gray-700">
+                  <h3 className="font-bold mb-2">🚀 Flotte</h3>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>✈️ Chasseurs: {fleet.fighters}</div>
+                    <div>🚀 Croiseurs: {fleet.cruisers}</div>
+                    <div>🛸 Cuirassés: {fleet.battleships}</div>
+                    <div>🛰️ Porte-vaisseaux: {fleet.carriers}</div>
+                  </div>
+                </div>
+
+                {combatLog.length > 0 && (
+                  <div className="bg-black bg-opacity-70 rounded-xl p-4 border-2 border-gray-700">
+                    <h3 className="font-bold mb-2">📰 Journal</h3>
+                    {combatLog.map((log, i) => (
+                      <div key={i} className="text-xs text-gray-300 mb-1">{log}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* COMMANDANT */}
+            {selectedTab === 'commander' && (
+              <div className="bg-black bg-opacity-70 rounded-xl p-6 border-2 border-gray-700">
+                <h3 className="text-xl font-bold mb-4">👤 Commandant {playerName}</h3>
+                <div className="mb-4">
+                  <div className="flex justify-between mb-2 text-sm">
+                    <span>Niveau {commander.level}</span>
+                    <span>{commander.xp}/{commander.xpToNext} XP</span>
+                  </div>
+                  <div className="w-full bg-gray-700 rounded-full h-3">
+                    <div 
+                      className="bg-gradient-to-r from-yellow-400 to-orange-500 h-3 rounded-full"
+                      style={{ width: `${(commander.xp / commander.xpToNext) * 100}%` }}
+                    />
+                  </div>
+                </div>
+
+                <p className="text-sm text-yellow-400 mb-4">
+                  Points disponibles: {commander.level - (commander.skills.mining + commander.skills.combat + commander.skills.engineering)}
+                </p>
+
+                <div className="space-y-3">
+                  <div className="bg-gray-900 p-3 rounded-lg">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <h4 className="font-bold text-sm">⛏️ Exploitation</h4>
+                        <p className="text-xs text-gray-400">+5% minéraux par niveau</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl text-blue-400">{commander.skills.mining}</span>
+                        <button
+                          onClick={() => upgradeSkill('mining')}
+                          disabled={commander.level <= (commander.skills.mining + commander.skills.combat + commander.skills.engineering)}
+                          className="px-3 py-1 bg-blue-600 rounded text-sm disabled:opacity-50"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-900 p-3 rounded-lg">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <h4 className="font-bold text-sm">⚔️ Combat</h4>
+                        <p className="text-xs text-gray-400">+10% puissance par niveau</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl text-red-400">{commander.skills.combat}</span>
+                        <button
+                          onClick={() => upgradeSkill('combat')}
+                          disabled={commander.level <= (commander.skills.mining + commander.skills.combat + commander.skills.engineering)}
+                          className="px-3 py-1 bg-red-600 rounded text-sm disabled:opacity-50"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-900 p-3 rounded-lg">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <h4 className="font-bold text-sm">🔧 Ingénierie</h4>
+                        <p className="text-xs text-gray-400">-5% temps construction par niveau</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl text-yellow-400">{commander.skills.engineering}</span>
+                        <button
+                          onClick={() => upgradeSkill('engineering')}
+                          disabled={commander.level <= (commander.skills.mining + commander.skills.combat + commander.skills.engineering)}
+                          className="px-3 py-1 bg-yellow-600 rounded text-sm disabled:opacity-50"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* SECTEURS */}
+            {selectedTab === 'sectors' && (
+              <div className="space-y-3">
+                {sectors.map(sector => (
+                  <div 
+                    key={sector.id} 
+                    className={`bg-black bg-opacity-70 rounded-xl p-4 border-2 ${
+                      sector.controlled ? 'border-green-500' : 'border-gray-700'
+                    }`}
+                  >
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <h4 className="font-bold">{sector.name}</h4>
                         <p className="text-xs text-gray-400">
-                          Remportez 10 victoires ou collectez 3 artefacts anciens
-                        </p>
-                        <p className="text-xs text-gray-500 mt-2">
-                          {totalVictories}/10 victoires | {ancientArtifacts}/3 artefacts
+                          Bonus: {sector.bonus === 'all' ? 'Toutes ressources' : sector.bonus} +{Math.round((sector.value - 1) * 100)}%
                         </p>
                       </div>
-                    )}
+                      <span className={`px-3 py-1 rounded text-sm ${sector.controlled ? 'bg-green-600' : 'bg-gray-700'}`}>
+                        {sector.controlled ? '✓' : '🔒'}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const SecretRaceNotification = () => {
-    if (!showSecretDiscovery) return null;
-    
-    return (
-      <div className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-70 backdrop-blur-sm">
-        <div className="bg-gradient-to-br from-yellow-900 to-amber-900 p-8 rounded-2xl border-4 border-yellow-400 shadow-2xl max-w-md">
-          <div className="text-center">
-            <div className="text-6xl mb-4">⚡</div>
-            <h2 className="text-3xl font-bold text-yellow-300 mb-4">
-              DÉCOUVERTE MAJEURE!
-            </h2>
-            <p className="text-yellow-100 mb-2">
-              Vous avez débloqué la race secrète:
-            </p>
-            <p className="text-4xl font-bold text-white mb-4">
-              LES PRÉCURSEURS
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const EventNotification = () => {
-    if (!activeEvent) return null;
-    
-    return (
-      <div className="fixed top-4 right-4 z-40">
-        <div className={`${activeEvent.type === 'bonus' ? 'bg-green-900' : 'bg-red-900'} bg-opacity-90 backdrop-blur-sm p-4 rounded-lg border-2 ${activeEvent.type === 'bonus' ? 'border-green-400' : 'border-red-400'} shadow-2xl max-w-xs`}>
-          <h3 className="font-bold text-white mb-1">{activeEvent.title}</h3>
-          <p className="text-sm text-gray-200">{activeEvent.desc}</p>
-        </div>
-      </div>
-    );
-  };
-
-  return (
-    <div className="min-h-screen text-white p-2 sm:p-4 relative overflow-hidden">
-      <AnimatedBackground race={selectedRace} />
-      <SecretRaceNotification />
-      <EventNotification />
-      
-      <div className="max-w-6xl mx-auto relative z-10">
-        <div className="bg-black bg-opacity-70 backdrop-blur-md rounded-xl p-4 mb-4 border-2 shadow-xl" style={{ borderColor: races[selectedRace].color }}>
-          <div className="flex justify-between items-center mb-4">
-            <div className="flex-1">
-              <h1 className="text-2xl font-bold flex items-center gap-2">
-                <span>{playerName}</span>
-                {selectedRace === 'ancient' && <Star className="text-yellow-400" size={24} />}
-              </h1>
-              <p className="text-sm" style={{ color: races[selectedRace].color }}>
-                {races[selectedRace].name}
-              </p>
-              <div className="flex items-center gap-4 mt-2 text-xs">
-                <div className="flex items-center gap-1">
-                  <Users size={14} />
-                  <span>Niv. {commander.level}</span>
-                </div>
-                <div className="flex-1 bg-gray-700 rounded-full h-2 max-w-[100px]">
-                  <div 
-                    className="bg-yellow-400 h-2 rounded-full transition-all"
-                    style={{ width: `${(commander.xp / commander.xpToNext) * 100}%` }}
-                  />
-                </div>
-                <span className="text-gray-400">{commander.xp}/{commander.xpToNext} XP</span>
-              </div>
-              <p className="text-xs text-gray-400 mt-1">
-                🏆 {totalVictories} victoires | ⭐ {ancientArtifacts} artefacts
-              </p>
-            </div>
-            <div className="text-5xl filter drop-shadow-lg">{races[selectedRace].icon}</div>
-          </div>
-          
-          <div className="grid grid-cols-3 gap-2 sm:gap-4">
-            <div className="bg-gray-900 bg-opacity-70 p-2 rounded-lg border border-blue-500">
-              <div className="text-xs text-gray-400">Minéraux</div>
-              <div className="font-bold text-blue-400">{Math.floor(resources.minerals)}</div>
-            </div>
-            <div className="bg-gray-900 bg-opacity-70 p-2 rounded-lg border border-yellow-500">
-              <div className="text-xs text-gray-400">Énergie</div>
-              <div className="font-bold text-yellow-400">{Math.floor(resources.energy)}</div>
-            </div>
-            <div className="bg-gray-900 bg-opacity-70 p-2 rounded-lg border border-purple-500">
-              <div className="text-xs text-gray-400">Cristaux</div>
-              <div className="font-bold text-purple-400">{Math.floor(resources.crystals)}</div>
-            </div>
-          </div>
-
-          {(buildQueue.length > 0 || shipQueue.length > 0) && (
-            <div className="mt-4 space-y-2">
-              {buildQueue.slice(0, 3).map((item, i) => (
-                <div key={i} className="bg-gray-900 bg-opacity-70 p-2 rounded flex items-center justify-between text-xs">
-                  <span>🏗️ {item.name}</span>
-                  <div className="flex items-center gap-2">
-                    <Clock size={12} />
-                    <span className="text-yellow-400">{formatTime(item.timeRemaining)}</span>
-                  </div>
-                </div>
-              ))}
-              {shipQueue.slice(0, 3).map((item, i) => (
-                <div key={i} className="bg-gray-900 bg-opacity-70 p-2 rounded flex items-center justify-between text-xs">
-                  <span>🚀 {item.name}</span>
-                  <div className="flex items-center gap-2">
-                    <Clock size={12} />
-                    <span className="text-green-400">{formatTime(item.timeRemaining)}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="flex gap-2 mb-4 overflow-x-auto">
-          {['overview', 'commander', 'sectors', 'buildings', 'fleet', 'combat'].map(tab => (
-            <button
-              key={tab}
-              onClick={() => setSelectedTab(tab)}
-              className={`px-3 py-2 rounded-lg whitespace-nowrap backdrop-blur-md transition-all text-sm ${
-                selectedTab === tab 
-                  ? 'bg-opacity-90 shadow-lg transform scale-105' 
-                  : 'bg-black bg-opacity-50 hover:bg-opacity-70'
-              }`}
-              style={{ 
-                backgroundColor: selectedTab === tab ? races[selectedRace].color : undefined,
-                borderWidth: '2px',
-                borderColor: selectedTab === tab ? races[selectedRace].color : 'transparent'
-              }}
-            >
-              {tab === 'overview' && '🏠'}
-              {tab === 'commander' && '👤'}
-              {tab === 'sectors' && '🗺️'}
-              {tab === 'buildings' && '🏗️'}
-              {tab === 'fleet' && '🚀'}
-              {tab === 'combat' && '⚔️'}
-            </button>
-          ))}
-        </div>
-
-        {selectedTab === 'overview' && (
-          <div className="space-y-4">
-            <div className="bg-black bg-opacity-70 backdrop-blur-md rounded-xl p-4 border-2 border-gray-700">
-              <h3 className="font-bold mb-2 flex items-center gap-2">
-                <TrendingUp size={20} /> Production (par 3s)
-              </h3>
-              <div className="grid grid-cols-3 gap-2 text-sm">
-                <div>Min: +{Math.floor(buildings.mineLevel * 10 * (races[selectedRace].bonus.minerals || 1) * (1 + commander.skills.mining * 0.05))}</div>
-                <div>Ene: +{Math.floor(buildings.powerPlantLevel * 8 * (races[selectedRace].bonus.energy || 1))}</div>
-                <div>Cri: +{Math.floor(buildings.crystalExtractorLevel * 3 * (races[selectedRace].bonus.crystals || 1))}</div>
-              </div>
-            </div>
-
-            <div className="bg-black bg-opacity-70 backdrop-blur-md rounded-xl p-4 border-2 border-gray-700">
-              <h3 className="font-bold mb-2 flex items-center gap-2">
-                <Rocket size={20} /> Flotte
-              </h3>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div>✈️ {fleet.fighters}</div>
-                <div>🚀 {fleet.cruisers}</div>
-                <div>🛸 {fleet.battleships}</div>
-                <div>🛰️ {fleet.carriers}</div>
-              </div>
-            </div>
-
-            {combatLog.length > 0 && (
-              <div className="bg-black bg-opacity-70 backdrop-blur-md rounded-xl p-4 border-2 border-gray-700">
-                <h3 className="font-bold mb-2">📰 Journal</h3>
-                {combatLog.map((log, i) => (
-                  <div key={i} className="text-xs text-gray-300 mb-1">{log}</div>
                 ))}
               </div>
             )}
-          </div>
-        )}
 
-        {selectedTab === 'commander' && (
-          <div className="space-y-4">
-            <div className="bg-black bg-opacity-70 backdrop-blur-md rounded-xl p-6 border-2 border-gray-700">
-              <h3 className="text-xl font-bold mb-4">👤 Commandant {playerName}</h3>
-              <div className="mb-4">
-                <div className="flex justify-between mb-2 text-sm">
-                  <span>Niveau {commander.level}</span>
-                  <span>{commander.xp}/{commander.xpToNext} XP</span>
-                </div>
-                <div className="w-full bg-gray-700 rounded-full h-3">
-                  <div 
-                    className="bg-gradient-to-r from-yellow-400 to-orange-500 h-3 rounded-full"
-                    style={{ width: `${(commander.xp / commander.xpToNext) * 100}%` }}
-                  />
-                </div>
-              </div>
-
-              <p className="text-sm text-yellow-400 mb-4">
-                Points disponibles: {commander.level - (commander.skills.mining + commander.skills.combat + commander.skills.engineering)}
-              </p>
-
+            {/* BÂTIMENTS */}
+            {selectedTab === 'buildings' && (
               <div className="space-y-3">
-                <div className="bg-gray-900 bg-opacity-70 p-3 rounded-lg">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <h4 className="font-bold text-sm">⛏️ Exploitation</h4>
-                      <p className="text-xs text-gray-400">+5% minéraux</p>
+                {Object.entries({
+                  mineLevel: { name: 'Mine', icon: '⛏️', cost: { minerals: 100, energy: 50 }, time: 60 },
+                  powerPlantLevel: { name: 'Centrale', icon: '⚡', cost: { minerals: 80, energy: 40 }, time: 50 },
+                  crystalExtractorLevel: { name: 'Extracteur', icon: '💎', cost: { minerals: 150, energy: 100, crystals: 50 }, time: 90 },
+                  shipyardLevel: { name: 'Chantier', icon: '🏭', cost: { minerals: 200, energy: 150, crystals: 100 }, time: 120 },
+                  defenseLevel: { name: 'Défense', icon: '🛡️', cost: { minerals: 180, energy: 120, crystals: 80 }, time: 80 }
+                }).map(([key, building]) => {
+                  const level = buildings[key];
+                  const cost = {
+                    minerals: Math.floor(building.cost.minerals * Math.pow(1.5, level)),
+                    energy: Math.floor(building.cost.energy * Math.pow(1.5, level)),
+                    crystals: building.cost.crystals ? Math.floor(building.cost.crystals * Math.pow(1.5, level)) : 0
+                  };
+                  const buildTime = Math.floor(building.time * Math.pow(1.3, level) * (races[selectedRace].bonus.buildSpeed || 1) * (1 - commander.skills.engineering * 0.05));
+                  const canBuild = resources.minerals >= cost.minerals && resources.energy >= cost.energy && resources.crystals >= cost.crystals;
+                  
+                  return (
+                    <div key={key} className="bg-black bg-opacity-70 rounded-xl p-3 border-2 border-gray-700">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xl">{building.icon}</span>
+                            <span className="font-bold text-sm">{building.name}</span>
+                            <span className="text-xs text-gray-400">Niv.{level}</span>
+                          </div>
+                          <div className="text-xs text-gray-400">
+                            {cost.minerals}M / {cost.energy}E {cost.crystals > 0 && `/ ${cost.crystals}C`} | ⏰{formatTime(buildTime)}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => buildBuilding(key)}
+                          disabled={!canBuild}
+                          className={`px-3 py-1 rounded text-sm ${canBuild ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-700 opacity-50'}`}
+                        >
+                          Construire
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xl text-blue-400">{commander.skills.mining}</span>
-                      <button
-                        onClick={() => upgradeSkill('mining')}
-                        disabled={commander.level <= commander.skills.mining}
-                        className="px-3 py-1 bg-blue-600 rounded text-sm disabled:opacity-50"
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-gray-900 bg-opacity-70 p-3 rounded-lg">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <h4 className="font-bold text-sm">⚔️ Combat</h4>
-                      <p className="text-xs text-gray-400">+10% puissance</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xl text-red-400">{commander.skills.combat}</span>
-                      <button
-                        onClick={() => upgradeSkill('combat')}
-                        disabled={commander.level <= commander.skills.combat}
-                        className="px-3 py-1 bg-red-600 rounded text-sm disabled:opacity-50"
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-gray-900 bg-opacity-70 p-3 rounded-lg">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <h4 className="font-bold text-sm">🔧 Ingénierie</h4>
-                      <p className="text-xs text-gray-400">-5% temps construction</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xl text-yellow-400">{commander.skills.engineering}</span>
-                      <button
-                        onClick={() => upgradeSkill('engineering')}
-                        disabled={commander.level <= commander.skills.engineering}
-                        className="px-3 py-1 bg-yellow-600 rounded text-sm disabled:opacity-50"
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                  );
+                })}
               </div>
-            </div>
-          </div>
-        )}
+            )}
 
-        {selectedTab === 'sectors' && (
-          <div className="space-y-3">
-            {sectors.map(sector => (
-              <div 
-                key={sector.id} 
-                className={`bg-black bg-opacity-70 backdrop-blur-md rounded-xl p-4 border-2 ${
-                  sector.controlled ? 'border-green-500' : 'border-gray-700'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="font-bold">{sector.name}</h4>
-                    <p className="text-xs text-gray-400">
-                      {sector.bonus === 'all' ? 'Toutes' : sector.bonus} +{Math.round((sector.value - 1) * 100)}%
-                    </p>
-                  </div>
-                  <div>
-                    {sector.controlled ? (
-                      <span className="px-3 py-1 bg-green-600 rounded text-sm">✓</span>
-                    ) : (
-                      <span className="px-3 py-1 bg-gray-700 rounded text-sm">🔒</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {selectedTab === 'buildings' && (
-          <div className="space-y-3">
-            {Object.entries({
-              mineLevel: { name: 'Mine', icon: '⛏️', cost: { minerals: 100, energy: 50 }, time: 60 },
-              powerPlantLevel: { name: 'Centrale', icon: '⚡', cost: { minerals: 80, energy: 40 }, time: 50 },
-              crystalExtractorLevel: { name: 'Extracteur', icon: '💎', cost: { minerals: 150, energy: 100, crystals: 50 }, time: 90 },
-              shipyardLevel: { name: 'Chantier', icon: '🏭', cost: { minerals: 200, energy: 150, crystals: 100 }, time: 120 },
-              defenseLevel: { name: 'Défense', icon: '🛡️', cost: { minerals: 180, energy: 120, crystals: 80 }, time: 80 }
-            }).map(([key, building]) => {
-              const level = buildings[key];
-              const cost = {
-                minerals: Math.floor(building.cost.minerals * Math.pow(1.5, level)),
-                energy: Math.floor(building.cost.energy * Math.pow(1.5, level)),
-                crystals: building.cost.crystals ? Math.floor(building.cost.crystals * Math.pow(1.5, level)) : 0
-              };
-              const buildTime = Math.floor(building.time * Math.pow(1.3, level) * (races[selectedRace].bonus.buildSpeed || 1) * (1 - commander.skills.engineering * 0.05));
-              const canBuild = resources.minerals >= cost.minerals && resources.energy >= cost.energy && resources.crystals >= cost.crystals;
-              
-              return (
-                <div key={key} className="bg-black bg-opacity-70 backdrop-blur-md rounded-xl p-3 border-2 border-gray-700">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xl">{building.icon}</span>
-                        <span className="font-bold text-sm">{building.name}</span>
-                        <span className="text-xs text-gray-400">Niv.{level}</span>
-                      </div>
-                      <div className="text-xs text-gray-400">
-                        {cost.minerals}M / {cost.energy}E {cost.crystals > 0 && `/ ${cost.crystals}C`} | {formatTime(buildTime)}
+            {/* FLOTTE */}
+            {selectedTab === 'fleet' && (
+              <div className="space-y-3">
+                {Object.entries({
+                  fighters: { name: 'Chasseur', icon: '✈️', cost: { minerals: 50, energy: 30 }, time: 30 },
+                  cruisers: { name: 'Croiseur', icon: '🚀', cost: { minerals: 150, energy: 100, crystals: 50 }, time: 60 },
+                  battleships: { name: 'Cuirassé', icon: '🛸', cost: { minerals: 400, energy: 300, crystals: 200 }, time: 120 },
+                  carriers: { name: 'Porte-vaisseaux', icon: '🛰️', cost: { minerals: 800, energy: 600, crystals: 400 }, time: 180 }
+                }).map(([key, ship]) => {
+                  const buildTime = Math.floor(ship.time * (races[selectedRace].bonus.buildSpeed || 1) * (1 - commander.skills.engineering * 0.05));
+                  const canBuild = resources.minerals >= ship.cost.minerals && resources.energy >= ship.cost.energy && (!ship.cost.crystals || resources.crystals >= ship.cost.crystals);
+                  
+                  return (
+                    <div key={key} className="bg-black bg-opacity-70 rounded-xl p-3 border-2 border-gray-700">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xl">{ship.icon}</span>
+                            <span className="font-bold text-sm">{ship.name}</span>
+                            <span className="text-xs text-gray-400">×{fleet[key]}</span>
+                          </div>
+                          <div className="text-xs text-gray-400">
+                            {ship.cost.minerals}M / {ship.cost.energy}E {ship.cost.crystals && `/ ${ship.cost.crystals}C`} | ⏰{formatTime(buildTime)}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => buildShip(key)}
+                          disabled={!canBuild}
+                          className={`px-3 py-1 rounded text-sm ${canBuild ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-700 opacity-50'}`}
+                        >
+                          Construire
+                        </button>
                       </div>
                     </div>
-                    <button
-                      onClick={() => buildBuilding(key)}
-                      disabled={!canBuild}
-                      className={`px-3 py-1 rounded text-sm ${canBuild ? 'bg-blue-600' : 'bg-gray-700 opacity-50'}`}
-                    >
-                      Construire
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {selectedTab === 'fleet' && (
-          <div className="space-y-3">
-            {Object.entries({
-              fighters: { name: 'Chasseur', icon: '✈️', cost: { minerals: 50, energy: 30 }, power: 10, time: 30 },
-              cruisers: { name: 'Croiseur', icon: '🚀', cost: { minerals: 150, energy: 100, crystals: 50 }, power: 30, time: 60 },
-              battleships: { name: 'Cuirassé', icon: '🛸', cost: { minerals: 400, energy: 300, crystals: 200 }, power: 80, time: 120 },
-              carriers: { name: 'Porte-vaisseaux', icon: '🛰️', cost: { minerals: 800, energy: 600, crystals: 400 }, power: 150, time: 180 }
-            }).map(([key, ship]) => {
-              const buildTime = Math.floor(ship.time * (races[selectedRace].bonus.buildSpeed || 1) * (1 - commander.skills.engineering * 0.05));
-              const canBuild = resources.minerals >= ship.cost.minerals && resources.energy >= ship.cost.energy && (!ship.cost.crystals || resources.crystals >= ship.cost.crystals);
-              
-              return (
-                <div key={key} className="bg-black bg-opacity-70 backdrop-blur-md rounded-xl p-3 border-2 border-gray-700">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xl">{ship.icon}</span>
-                        <span className="font-bold text-sm">{ship.name}</span>
-                        <span className="text-xs text-gray-400">×{fleet[key]}</span>
-                      </div>
-                      <div className="text-xs text-gray-400">
-                        {ship.cost.minerals}M / {ship.cost.energy}E {ship.cost.crystals && `/ ${ship.cost.crystals}C`} | {formatTime(buildTime)}
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => buildShip(key)}
-                      disabled={!canBuild}
-                      className={`px-3 py-1 rounded text-sm ${canBuild ? 'bg-green-600' : 'bg-gray-700 opacity-50'}`}
-                    >
-                      Construire
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {selectedTab === 'combat' && (
-          <div className="space-y-3">
-            {enemyFleets.length === 0 ? (
-              <div className="bg-black bg-opacity-70 backdrop-blur-md rounded-xl p-8 text-center border-2 border-gray-700">
-                <Globe size={48} className="mx-auto mb-4 text-gray-600" />
-                <p className="text-gray-400">Aucune flotte détectée...</p>
+                  );
+                })}
               </div>
-            ) : (
-              enemyFleets.map(enemy => {
-                const bonus = races[selectedRace].bonus;
-                const combatBonus = 1 + (commander.skills.combat * 0.1);
-                const enemyPower = enemy.fighters * 10 + enemy.cruisers * 30 + enemy.battleships * 80;
-                const playerPower = (fleet.fighters * 10 * (bonus.fighters || 1) + fleet.cruisers * 30 + fleet.battleships * 80 * (bonus.battleships || 1) + fleet.carriers * 150) * combatBonus;
-                const winChance = playerPower > 0 ? Math.round((playerPower / (playerPower + enemyPower)) * 100) : 0;
-                
-                return (
-                  <div key={enemy.id} className={`bg-black bg-opacity-70 backdrop-blur-md rounded-xl p-4 border-2 ${
-                    enemy.hasArtifact ? 'border-yellow-500' : enemy.sector ? 'border-purple-500' : 'border-red-700'
-                  }`}>
-                    <div className="flex justify-between items-start mb-2">
-                      <div>
-                        <h3 className={`font-bold text-sm ${enemy.hasArtifact ? 'text-yellow-400' : enemy.sector ? 'text-purple-400' : 'text-red-400'}`}>
-                          {enemy.name}
-                        </h3>
-                        {enemy.sector && <div className="text-xs text-purple-300">🎯 {enemy.sector.name}</div>}
-                        <div className="text-xs text-gray-400">{enemy.fighters}✈️ {enemy.cruisers}🚀 {enemy.battleships}🛸</div>
-                        <div className={`text-xs ${winChance >= 70 ? 'text-green-400' : winChance >= 40 ? 'text-yellow-400' : 'text-red-400'}`}>
-                          Victoire: {winChance}%
+            )}
+
+            {/* COMBAT */}
+            {selectedTab === 'combat' && (
+              <div className="space-y-3">
+                {enemyFleets.length === 0 ? (
+                  <div className="bg-black bg-opacity-70 rounded-xl p-8 text-center border-2 border-gray-700">
+                    <div className="text-6xl mb-4">🌍</div>
+                    <p className="text-gray-400">Aucune flotte détectée...</p>
+                    <p className="text-xs text-gray-500 mt-2">Ennemis générés toutes les 15 secondes</p>
+                  </div>
+                ) : (
+                  enemyFleets.map(enemy => {
+                    const bonus = races[selectedRace].bonus;
+                    const combatBonus = 1 + (commander.skills.combat * 0.1);
+                    const enemyPower = enemy.fighters * 10 + enemy.cruisers * 30 + enemy.battleships * 80;
+                    const playerPower = (fleet.fighters * 10 * (bonus.fighters || 1) + fleet.cruisers * 30 + fleet.battleships * 80 * (bonus.battleships || 1) + fleet.carriers * 150) * combatBonus;
+                    const winChance = playerPower > 0 ? Math.round((playerPower / (playerPower + enemyPower)) * 100) : 0;
+                    
+                    return (
+                      <div key={enemy.id} className={`bg-black bg-opacity-70 rounded-xl p-4 border-2 ${
+                        enemy.hasArtifact ? 'border-yellow-500 shadow-lg' : enemy.sector ? 'border-purple-500 shadow-lg' : 'border-red-700'
+                      }`}>
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <h3 className={`font-bold text-sm ${enemy.hasArtifact ? 'text-yellow-400' : enemy.sector ? 'text-purple-400' : 'text-red-400'}`}>
+                              {enemy.name}
+                            </h3>
+                            {enemy.sector && <div className="text-xs text-purple-300">🎯 {enemy.sector.name}</div>}
+                            <div className="text-xs text-gray-400">{enemy.fighters}✈️ {enemy.cruisers}🚀 {enemy.battleships}🛸</div>
+                            <div className={`text-xs mt-1 ${winChance >= 70 ? 'text-green-400' : winChance >= 40 ? 'text-yellow-400' : 'text-red-400'}`}>
+                              Chances: {winChance}%
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => attackEnemy(enemy)}
+                            className="px-4 py-2 bg-gradient-to-r from-red-600 to-orange-600 rounded text-sm font-bold hover:from-red-700 hover:to-orange-700"
+                          >
+                            ⚔️ Attaquer
+                          </button>
+                        </div>
+                        <div className="text-xs text-green-400">
+                          💰 {enemy.rewards.minerals}M / {enemy.rewards.energy}E / {enemy.rewards.crystals}C / {enemy.rewards.xp}XP
+                          {enemy.hasArtifact && <span className="text-yellow-400 ml-2">⭐ Artefact!</span>}
+                          {enemy.sector && <span className="text-purple-400 ml-2">🎯 Conquête secteur!</span>}
                         </div>
                       </div>
-                      <button
-                        onClick={() => attackEnemy(enemy)}
-                        className="px-3 py-1 bg-red-600 rounded text-sm"
-                      >
-                        ⚔️
-                      </button>
-                    </div>
-                    <div className="text-xs text-green-400">
-                      💰 {enemy.rewards.minerals}M / {enemy.rewards.energy}E / {enemy.rewards.crystals}C / {enemy.rewards.xp}XP
-                      {enemy.hasArtifact && <span className="text-yellow-400 ml-2">⭐</span>}
-                    </div>
-                  </div>
-                );
-              })
+                    );
+                  })
+                )}
+              </div>
             )}
           </div>
-        )}
-      </div>
-    </div>
-  );
-};
+        </div>
+      );
+    };
 
-export default GalacticDominion;
-      function Game() {
-        return <h1>Bienvenue dans Galactic Dominion 🚀</h1>;
-      }
-
-      ReactDOM.render(<Game />, document.getElementById('root'));
-    </script>
-  </body>
+    // RENDU FINAL
+    ReactDOM.render(<GalacticDominion />, document.getElementById('root'));
+  </script>
+</body>
 </html>
