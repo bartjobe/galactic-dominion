@@ -484,6 +484,56 @@
   }
 
   ReactDOM.render(<App />, document.getElementById('root'));
+    /* ================================
+   1️⃣  AJOUT DES RESSOURCES + BÂTIMENTS
+===================================*/
+
+// Données de base des bâtiments
+const BASE_BUILDINGS = {
+  mine: { name: "Mine", cost: 50, baseProd: 2, resType: "minerai" },
+  power: { name: "Centrale", cost: 75, baseProd: 3, resType: "energie" },
+  extractor: { name: "Extracteur de cristal", cost: 100, baseProd: 1, resType: "cristal" },
+  lab: { name: "Laboratoire", cost: 150, baseProd: 0.5, resType: "science" },
+};
+
+// HUD d’affichage des ressources
+function HUD({ resources }) {
+  return (
+    <div className="hud">
+      <div>⛏️ Minerai : {Math.floor(resources.minerai)}</div>
+      <div>⚡ Énergie : {Math.floor(resources.energie)}</div>
+      <div>💎 Cristal : {Math.floor(resources.cristal)}</div>
+      <div>🧪 Science : {Math.floor(resources.science)}</div>
+    </div>
+  );
+}
+
+// Panneau de construction
+function PlanetPanel({ selectedStar, buildings, resources, onBuild }) {
+  if (!selectedStar) return null;
+
+  return (
+    <div className="panel">
+      <h3>🌍 {selectedStar.name}</h3>
+      <p>Bâtiments :</p>
+      {Object.entries(BASE_BUILDINGS).map(([key, b]) => (
+        <button
+          key={key}
+          onClick={() => onBuild(key, b.cost)}
+          disabled={resources.minerai < b.cost}
+        >
+          {b.name} (Coût : {b.cost})
+        </button>
+      ))}
+      <div className="building-stats">
+        {Object.entries(buildings).map(([k, v]) => (
+          <p key={k}>{BASE_BUILDINGS[k].name} : {v}</p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
   </script>
 </body>
 </html>
