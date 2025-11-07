@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>La Galaxie Vivante — V3</title>
+
+  <!-- React 17 + Babel -->
+  <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    html,body { height:100%; margin:0; background: radial-gradient(ellipse at bottom, #020419 0%, #00030a 60%, #000 100%); color:#e6f0ff; font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; overflow:hidden; }
+    #root { width:100%; height:100vh; position:relative; }
+    .star { transition: transform 0.12s, box-shadow 0.12s, filter 0.12s; will-change: transform; }
+    .star:hover { transform: scale(1.35); z-index:80; }
+    .halo { filter: blur(6px) saturate(120%); opacity:0.9; }
+    .pulse { animation: pulse 2.5s infinite ease-in-out; }
+    @keyframes pulse { 0% { transform: scale(1); opacity: 0.9 } 50% { transform: scale(1.12); opacity: 0.6 } 100% { transform: scale(1); opacity: 0.9 } }
+    .notif { animation: pop .35s ease-out; }
+    @keyframes pop { from { transform: translateY(8px); opacity:0 } to { transform: translateY(0); opacity:1 } }
+    .journal::-webkit-scrollbar { width:8px }
+    .journal::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius:8px }
+    .tooltip { pointer-events:none; position:fixed; z-index:9999; background:rgba(6,10,18,0.85); color:#e6f0ff; padding:6px 8px; border-radius:6px; font-size:12px; box-shadow:0 6px 18px rgba(0,0,0,0.6) }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+  const { useState, useEffect, useRef } = React;
+
+  /* ---------- UTIL ---------- */
+  const rand = (a,b) => Math.random()*(b-a)+a;
+  const randint = (a,b) => Math.floor(rand(a,b+1));
+  const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+  const now = () => Date.now();
+
+  const WORLD = { SIZE: 3800, BASE_COUNT: 36 };
+
+  // procedural name
+  const syll = ["zor","kan","vel","tor","lin","rax","mer","ion","tal","quor","xen","phi","lun","dra","ora","esh","nar","sol","vak"];
+  const randomName = () => syll[Math.floor(Math.random()*syll.length)] + syll[Math.floor(Math.random()*syll.length)] + "-" + randint(1,999);
+
+  /* ---------- CIV LEVEL / ALIGNMENT ----------
+    civLevel: 0..5 (primitif -> transcendé)
+    alignment: 'pacifique'|'conquérant'|'nomade'|'scientifique'|'isolationniste'
+  */
+  const alignments = ['pacifique','conquérant','nomade','scientifique','isolationniste'];
+  const nextId = (() => { let i=0; return () => 'S' + (++i); })();
+
+  function generateStar(i){
+    const lvl = randint(0,3); // initial variation (not too advanced)
+    const align = alignments[randint(0, alignments.length-1)];
+    return {
+      id: nextId(),
+      name: randomName(),
+      x: Math.floor(rand(80, WORLD.SIZE-80)),
+      y: Math.floor(rand(80, WORLD.SIZE-80)),
+      population: Math.floor(rand(10_000, 3_000_000)),
+      civLevel: lvl,
+      alignment: align,
+      energy: Math.floor(rand(100, 800)),
+      status: 'stable', // stable | unrest | war | expansion | collapsed
+      relations: {}, // id -> relation score (-100..100)
+      lastEvent: null,
+      colorSeed: Math.random()
+    };
+  }
+
+  function createGalaxy(n = WORLD.BASE_COUNT){
+    const stars = [];
+    for(let i=0;i<n;i++){
+      stars.push(generateStar(i));
+    }
+    // set initial neighbor relations based on distance
+    for(const a of stars){
+      for(const b of stars){
+        if (a.id === b.id) continue;
+        const d = Math.hypot(a.x - b.x, a.y - b.y);
+        // initially neutral, slight bias by distance
+        const relation = Math.floor( clamp(100 - d/40 + rand(-12,12), -80, 100) );
+        a.relations[b.id] = relation;
+      }
+    }
+    return stars;
+  }
+
+  /* ---------- EVOLUTION ---------- */
+  function evolveGalaxy(galaxy, hours, centralAI = {}) {
+    // centralAI can bias events
+    const aiInfluence = centralAI.mood || 0; // -1 .. +1
+    return galaxy.map(s => {
+      let ns = {...s};
+      // population growth depends on civLevel and status
+      let baseGrowth = 1 + (0.0008 * (ns.civLevel+1));
+      if (ns.status === 'expansion') baseGrowth += 0.01;
+      if (ns.status === 'war') baseGrowth -= 0.02;
+      // apply hours as compound growth
+      ns.population = Math.max(0, Math.floor(ns.population * Math.pow(1 + (baseGrowth-1), hours)));
+      // energy drift
+      ns.energy = Math.max(0, Math.floor(ns.energy + (hours * randint(-6,12))));
+      // tech progression chance
+      if (Math.random() < 0.015 * hours * (1 + (ns.civLevel/8))) {
+        ns.civLevel = Math.min(6, ns.civLevel + 1);
+      }
+      // status random shift affected by AI mood
+      if (Math.random() < (0.012 + 0.005*aiInfluence) * hours) {
+        const r = Math.random();
+        ns.status = r < 0.5 ? 'stable' : r < 0.8 ? 'expansion' : 'unrest';
+      }
+      // rare collapse
+      if (Math.random() < 0.0008 * hours) {
+        ns.status = 'collapsed';
+        ns.population = Math.floor(ns.population * 0.08);
+      }
+      ns.lastEvent = `Evolué ${hours}h`;
+      return ns;
+    });
+  }
+
+  /* ---------- EVENTS ---------- */
+  function chooseEvent(star, galaxy, centralAI) {
+    // returns {text, apply:star->star}
+    const r = Math.random();
+    const moodBias = centralAI.mood || 0;
+    if (r < 0.22 + 0.06*moodBias) {
+      // Discovery
+      const techUp = randint(1, Math.max(1, Math.floor(star.civLevel/2)+1));
+      const popGain = Math.floor(star.population * rand(0.01, 0.06));
+      return {
+        text: `${star.name} réalise une percée technologique (+${techUp}).`,
+        apply: (s) => ({ ...s, civLevel: Math.min(6, s.civLevel + techUp), population: s.population + popGain, lastEvent: `Découverte: +${techUp} tech` })
+      };
+    } else if (r < 0.48) {
+      // Expansion
+      return {
+        text: `${star.name} entre en phase d'expansion.`,
+        apply: (s) => ({ ...s, status: 'expansion', lastEvent: 'Phase expansion' })
+      };
+    } else if (r < 0.72) {
+      // War triggered with a neighbor if relation low
+      const neighbors = galaxy.filter(g => g.id !== star.id).slice().sort((a,b)=>{
+        const da = Math.hypot(a.x-star.x,a.y-star.y);
+        const db = Math.hypot(b.x-star.x,b.y-star.y);
+        return da - db;
+      }).slice(0,6);
+      const foe = neighbors.find(n => star.relations[n.id] < -10) || neighbors[ randint(0, neighbors.length-1) ];
+      const loss = Math.floor(star.population * rand(0.06, 0.28));
+      return {
+        text: `${star.name} engage un conflit contre ${foe.name} (-${loss.toLocaleString()} pop).`,
+        apply: (s) => ({ ...s, status: 'war', population: Math.max(0, s.population - loss), lastEvent: `Guerre contre ${foe.name}` })
+      };
+    } else {
+      // Alliance / trade
+      return {
+        text: `${star.name} signe un pacte commercial. Population augmentée.`,
+        apply: (s) => ({ ...s, population: Math.floor(s.population * (1 + rand(0.01,0.03))), lastEvent: 'Pacte commercial' })
+      };
+    }
+  }
+
+  /* ---------- CENTRAL AI ---------- */
+  function makeCentralAI(){
+    return {
+      mood: 0,      // -1..+1, affects chance of chaotic events
+      curiosity: 0.5,
+      lastAction: null,
+      intervene(stars, addLog) {
+        // sometimes nudge a star (boost or punish)
+        if (Math.random() < 0.18) {
+          const s = stars[ randint(0, stars.length-1) ];
+          const r = Math.random();
+          if (r < 0.5) {
+            // grant tech boon
+            const tech = randint(1,2);
+            addLog(`IA centrale: subvention technologique à ${s.name} (+${tech}).`);
+            return stars.map(x => x.id === s.id ? { ...x, civLevel: Math.min(6, x.civLevel + tech), lastEvent: 'IA: subvention tech' } : x);
+          } else {
+            // test: induce unrest
+            addLog(`IA centrale: perturbation orbitale près de ${s.name} (instabilité).`);
+            return stars.map(x => x.id === s.id ? { ...x, status: 'unrest', population: Math.max(1, Math.floor(x.population * 0.85)), lastEvent: 'IA: perturbation' } : x);
+          }
+        }
+        return stars;
+      }
+    };
+  }
+
+  /* ---------- RENDER: GalaxyMap with pan/zoom ---------- */
+  function GalaxyMap({galaxy, onSelect, camera, setCamera, highlighted}) {
+    const ref = useRef(null);
+    const dragging = useRef(false);
+    const last = useRef({x:0,y:0});
+
+    useEffect(() => {
+      const el = ref.current;
+      if(!el) return;
+      const onWheel = (e) => {
+        e.preventDefault();
+        const delta = -e.deltaY;
+        const zoomFactor = delta > 0 ? 1.1 : 0.9;
+        const rect = el.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        const worldX = (mx - camera.x) / camera.scale;
+        const worldY = (my - camera.y) / camera.scale;
+        const newScale = clamp(camera.scale * zoomFactor, 0.3, 2.2);
+        const nx = mx - worldX * newScale;
+        const ny = my - worldY * newScale;
+        setCamera(prev => ({...prev, scale:newScale, x:nx, y:ny}));
+      };
+      el.addEventListener('wheel', onWheel, { passive:false });
+      return () => el.removeEventListener('wheel', onWheel);
+    }, [camera, setCamera]);
+
+    const onPointerDown = (e) => { dragging.current = true; last.current = {x:e.clientX, y:e.clientY}; };
+    const onPointerMove = (e) => {
+      if (!dragging.current) return;
+      const dx = e.clientX - last.current.x;
+      const dy = e.clientY - last.current.y;
+      last.current = {x:e.clientX, y:e.clientY};
+      setCamera(c => ({...c, x: c.x + dx, y: c.y + dy}));
+    };
+    const onPointerUp = () => { dragging.current = false; };
+
+    const transform = `translate(${camera.x}px, ${camera.y}px) scale(${camera.scale})`;
+
+    return (
+      <div
+        ref={ref}
+        className="absolute inset-0"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerLeave={onPointerUp}
+        style={{ touchAction:'none' }}
+      >
+        <div
+          style={{
+            position:'absolute',
+            left:(window.innerWidth - WORLD.SIZE)/2,
+            top:(window.innerHeight - WORLD.SIZE)/2,
+            width: WORLD.SIZE,
+            height: WORLD.SIZE,
+            transform,
+            transformOrigin:'0 0',
+            transition: dragging.current ? 'none' : 'transform 0.06s'
+          }}
+        >
+          {/* faint grid + starfield */}
+          <div style={{position:'absolute', left:0, top:0, width:WORLD.SIZE, height:WORLD.SIZE, background:
+            'radial-gradient(circle at 20% 20%, rgba(255,255,255,0.02), transparent 30%), radial-gradient(circle at 70% 80%, rgba(255,255,255,0.01), transparent 20%)' }}>
+          </div>
+
+          {[...Array(160)].map((_,i)=>(
+            <div key={i} style={{
+              position:'absolute', left: rand(0, WORLD.SIZE), top: rand(0, WORLD.SIZE), width: Math.random()*2+0.5, height: Math.random()*2+0.5,
+              borderRadius:999, background:'rgba(255,255,255,0.05)'
+            }} />
+          ))}
+
+          {/* systems */}
+          {galaxy.map(s => {
+            const size = clamp(6 + Math.log10(Math.max(1, s.population))/1.05, 6, 40);
+            const baseColor = s.status === 'war' ? '#ff6b6b' : s.status === 'expansion' ? '#7efc6b' : s.status === 'collapsed' ? '#444' : '#4dd0e1';
+            // adjust hue by alignment
+            const alignHue = s.alignment === 'conquérant' ? '#ffb86b' : s.alignment === 'scientifique' ? '#b4a7ff' : s.alignment === 'pacifique' ? '#6ee7b7' : s.alignment === 'nomade' ? '#ffd86b' : '#9aa6ff';
+            const color = s.status === 'collapsed' ? '#555' : alignHue;
+            const haloSize = size * (1 + (s.civLevel/8));
+            return (
+              <div
+                key={s.id}
+                className="star"
+                onClick={(e)=>{ e.stopPropagation(); onSelect(s); }}
+                title={`${s.name} — ${s.civLevel} • ${s.alignment}`}
+                style={{
+                  position:'absolute',
+                  left: s.x - size/2,
+                  top: s.y - size/2,
+                  width: size,
+                  height: size,
+                  borderRadius:999,
+                  background: color,
+                  display:'flex',
+                  alignItems:'center',
+                  justifyContent:'center',
+                  fontSize:Math.min(14, size-4),
+                  fontWeight:800,
+                  color: '#021',
+                  boxShadow: highlighted === s.id ? '0 10px 30px rgba(0,0,0,0.7)' : 'none',
+                  cursor:'pointer',
+                  border: '1px solid rgba(255,255,255,0.06)'
+                }}
+              >
+                {/* halo */}
+                <div className="halo pulse" style={{
+                  position:'absolute', left: -((haloSize-size)/2), top: -((haloSize-size)/2),
+                  width: haloSize, height: haloSize, borderRadius:999, background: color, opacity: 0.06, zIndex:-1
+                }} />
+                <div style={{position:'absolute', right:-8, top:-8, fontSize:9, background:'rgba(0,0,0,0.45)', padding:'2px 4px', borderRadius:6}}>
+                  {s.civLevel}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  /* ---------- APP ---------- */
+  function App(){
+    const [galaxy, setGalaxy] = useState([]);
+    const [selected, setSelected] = useState(null);
+    const [log, setLog] = useState([]);
+    const [notif, setNotif] = useState(null);
+    const [camera, setCamera] = useState({ x: 0, y: 0, scale: 0.95 });
+    const [highlighted, setHighlighted] = useState(null);
+    const [centralAI, setCentralAI] = useState(makeCentralAI());
+    const tooltipRef = useRef(null);
+
+    // load or create
+    useEffect(() => {
+      const save = localStorage.getItem("galaxy_v3_save");
+      const last = localStorage.getItem("galaxy_v3_last");
+      if (save) {
+        let g = JSON.parse(save);
+        if (last) {
+          const hours = Math.floor((now() - parseInt(last,10)) / 3600000);
+          if (hours > 0) {
+            g = evolveGalaxy(g, hours, centralAI);
+            addLog(`${hours}h se sont écoulées pendant ton absence — évolution appliquée.`);
+            setNotif(`${hours}h appliquées`);
+          } else {
+            addLog("Chargement de la galaxie sauvegardée.");
+          }
+        }
+        setGalaxy(g);
+      } else {
+        const g = createGalaxy();
+        setGalaxy(g);
+        localStorage.setItem("galaxy_v3_save", JSON.stringify(g));
+        addLog("Nouvelle galaxie V3 générée.");
+      }
+      localStorage.setItem("galaxy_v3_last", now());
+    }, []);
+
+    // autosave
+    useEffect(() => {
+      const t = setInterval(() => {
+        localStorage.setItem("galaxy_v3_save", JSON.stringify(galaxy));
+        localStorage.setItem("galaxy_v3_last", now());
+      }, 9000);
+      return () => clearInterval(t);
+    }, [galaxy]);
+
+    // periodic event generator
+    useEffect(() => {
+      const t = setInterval(() => {
+        if (galaxy.length === 0) return;
+        // central AI sometimes intervenes
+        if (Math.random() < 0.18) {
+          const updated = centralAI.intervene(galaxy, addLog);
+          setGalaxy(updated);
+        }
+        // choose a random star to produce event
+        const star = galaxy[ randint(0, galaxy.length-1) ];
+        const ev = chooseEvent(star, galaxy, centralAI);
+        const updated = galaxy.map(s => s.id === star.id ? ev.apply(s) : s);
+        setGalaxy(updated);
+        addLog(ev.text);
+        setNotif(ev.text);
+        setHighlighted(star.id);
+        setTimeout(()=>setHighlighted(null), 3500);
+      }, 6500);
+      return () => clearInterval(t);
+    }, [galaxy, centralAI]);
+
+    // AI mood drift slowly
+    useEffect(() => {
+      const t = setInterval(() => {
+        setCentralAI(ai => ({ ...ai, mood: clamp(ai.mood + rand(-0.06, 0.06), -1, 1) }));
+      }, 12000);
+      return () => clearInterval(t);
+    }, []);
+
+    // notif timeout
+    useEffect(() => {
+      if (!notif) return;
+      const t = setTimeout(()=> setNotif(null), 4000);
+      return () => clearTimeout(t);
+    }, [notif]);
+
+    function addLog(text){
+      setLog(l => [ `${new Date().toLocaleTimeString()} — ${text}`, ...l].slice(0, 120));
+    }
+
+    function handleSelect(s){
+      setSelected(s);
+      addLog(`Fiche ouverte: ${s.name}`);
+    }
+
+    // actions
+    const sendAid = (id) => {
+      setGalaxy(g => g.map(s => s.id === id ? { ...s, population: Math.floor(s.population*1.06), lastEvent: 'Aide reçue' } : s));
+      addLog("Aide envoyée.");
+      setNotif("Aide envoyée");
+    };
+
+    const declareWar = (id) => {
+      setGalaxy(g => g.map(s => s.id === id ? { ...s, status:'war', lastEvent: 'Guerre déclarée' } : s));
+      addLog("Guerre déclarée.");
+      setNotif("Guerre !");
+    };
+
+    const fosterAlliance = (idA, idB) => {
+      setGalaxy(g => g.map(s => {
+        if (s.id === idA || s.id === idB) return { ...s, lastEvent: `Alliance ${idA === s.id ? idB : idA}`, relations: {...s.relations, [idA === s.id ? idB : idA]: 80 } };
+        return s;
+      }));
+      addLog("Alliance formée.");
+      setNotif("Alliance");
+    };
+
+    const addSystem = () => {
+      const s = generateStar();
+      setGalaxy(g => {
+        // set relations to others
+        for(const o of g) s.relations[o.id] = randint(-30, 40);
+        addLog(`Nouvelle étoile: ${s.name}`);
+        setNotif(`Crée: ${s.name}`);
+        return [...g, s];
+      });
+    };
+
+    const resetGalaxy = () => {
+      if (!confirm("Réinitialiser la galaxie (perdra la progression locale) ?")) return;
+      const g = createGalaxy();
+      setGalaxy(g);
+      localStorage.setItem("galaxy_v3_save", JSON.stringify(g));
+      localStorage.setItem("galaxy_v3_last", now());
+      setSelected(null);
+      addLog("Galaxie réinitialisée.");
+      setNotif("Réinitialisée");
+    };
+
+    // simple neighbor lookup
+    const neighborsOf = (s, radius=320) => galaxy.filter(x => x.id !== s.id && Math.hypot(x.x - s.x, x.y - s.y) < radius).slice(0,8);
+
+    // tooltip follow
+    useEffect(() => {
+      const handleMove = (e) => {
+        const el = document.getElementById('tooltip');
+        if (el) {
+          el.style.left = (e.clientX + 12) + 'px';
+          el.style.top = (e.clientY + 12) + 'px';
+        }
+      };
+      window.addEventListener('mousemove', handleMove);
+      return () => window.removeEventListener('mousemove', handleMove);
+    }, []);
+
+    return (
+      <div className="w-full h-full relative select-none">
+        {/* Topbar */}
+        <div className="absolute top-3 left-3 right-3 z-50 flex justify-between items-center gap-4">
+          <div className="flex items-center gap-3">
+            <div className="text-2xl font-bold text-cyan-300">🌌 La Galaxie Vivante — V3</div>
+            <div className="text-sm text-gray-300">Simulation — IA centrale — civilisations évolutives</div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="text-xs text-gray-300 mr-2">IA mood: <span className="font-semibold">{centralAI.mood.toFixed(2)}</span></div>
+            <button onClick={()=> { applyFastForward(6); }} className="px-3 py-1 bg-slate-700 rounded text-sm">+6h</button>
+            <button onClick={()=> { applyFastForward(24); }} className="px-3 py-1 bg-amber-700 rounded text-sm">+24h</button>
+            <button onClick={addSystem} className="px-3 py-1 bg-green-700 rounded text-sm">Ajouter système</button>
+            <button onClick={resetGalaxy} className="px-3 py-1 bg-red-700 rounded text-sm">Reset</button>
+          </div>
+        </div>
+
+        {/* Map */}
+        <GalaxyMap galaxy={galaxy} onSelect={handleSelect} camera={camera} setCamera={setCamera} highlighted={highlighted} />
+
+        {/* Right info */}
+        <div className="absolute right-4 top-20 w-96 bg-black bg-opacity-60 p-3 rounded z-50">
+          <h3 className="font-bold text-cyan-200 mb-2">Fiche Système</h3>
+          {!selected && <div className="text-sm text-gray-300">Clique sur une étoile pour afficher ses détails et actions.</div>}
+          {selected && (
+            <>
+              <div className="text-lg font-semibold">{selected.name}</div>
+              <div className="text-sm text-gray-300">Population: <span className="font-medium">{selected.population.toLocaleString()}</span></div>
+              <div className="text-sm text-gray-300">Niveau civilisation: <span className="font-medium">{selected.civLevel}</span></div>
+              <div className="text-sm text-gray-300">Alignement: <span className="font-medium">{selected.alignment}</span></div>
+              <div className="text-sm text-gray-300">Énergie: <span className="font-medium">{selected.energy}</span></div>
+              <div className="text-xs text-gray-400 mt-2">{selected.lastEvent}</div>
+
+              <div className="mt-3 flex gap-2">
+                <button onClick={()=> { sendAid(selected.id); }} className="px-2 py-1 bg-blue-600 rounded text-sm">Envoyer aide</button>
+                <button onClick={()=> { declareWar(selected.id); }} className="px-2 py-1 bg-red-600 rounded text-sm">Déclarer guerre</button>
+                <button onClick={()=> {
+                  const nb = neighborsOf(selected, 420);
+                  if (nb.length >= 1) fosterAlliance(selected.id, nb[0].id);
+                  else { addLog("Aucun voisin proche pour alliance."); setNotif("Aucun voisin"); }
+                }} className="px-2 py-1 bg-yellow-600 rounded text-sm">Forger alliance</button>
+              </div>
+
+              <div className="mt-3">
+                <div className="text-sm font-semibold text-gray-200">Voisins proches</div>
+                <div className="mt-2 space-y-1 text-xs">
+                  {neighborsOf(selected, 420).map(n => (
+                    <div key={n.id} className="flex justify-between items-center">
+                      <div>{n.name}</div>
+                      <div className="text-gray-300">{Math.round(Math.hypot(n.x-selected.x, n.y-selected.y))} px</div>
+                    </div>
+                  ))}
+                  {neighborsOf(selected, 420).length === 0 && <div className="text-gray-400">Aucun voisin dans le rayon.</div>}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Journal bottom-left */}
+        <div className="absolute bottom-4 left-4 z-50 w-96 bg-black bg-opacity-60 p-3 rounded journal" style={{ maxHeight:'46vh', overflowY:'auto' }}>
+          <div className="flex justify-between items-center mb-2">
+            <div className="font-semibold text-cyan-200">Journal Galactique</div>
+            <div className="text-xs text-gray-300">Evénements récents</div>
+          </div>
+          <div className="text-xs text-gray-200">
+            {log.length === 0 && <div>Aucun événement pour le moment.</div>}
+            {log.map((l,i)=> <div key={i} className="mb-1">• {l}</div>)}
+          </div>
+        </div>
+
+        {/* notif */}
+        {notif && (
+          <div className="absolute top-16 right-6 z-60 notif bg-white bg-opacity-5 backdrop-blur-sm p-3 rounded text-sm">
+            {notif}
+          </div>
+        )}
+
+        {/* help */}
+        <div className="absolute bottom-4 right-4 z-50 bg-black bg-opacity-50 p-2 rounded text-xs">
+          <div>Zoom: roulette | Pan: glisser | Cliquer: fiche</div>
+        </div>
+
+        {/* tooltip element */}
+        <div id="tooltip" className="tooltip" style={{display:'none'}} />
+
+      </div>
+    );
+
+    /* helper: fast forward */
+    function applyFastForward(hours) {
+      // this function exists in the top-level scope of App; but for simplicity we'll attach it to window for buttons
+      // implementation is inside App closure in runtime via binding
+    }
+  }
+
+  // We need to make applyFastForward available to App's buttons.
+  // Simple approach: re-render App and supply applyFastForward via refs.
+  // Instead, we will modify App to attach applyFastForward to window dynamically.
+  // Let's wrap the real App with a small bootstrap that binds the function.
+
+  function Bootstrap(){
+    const ref = useRef(null);
+    const [key, setKey] = useState(0);
+    // We will render App but also attach a global fast-forward that dispatches a custom event
+    useEffect(() => {
+      window.addEventListener('galaxy_applyFastForward', (e) => {
+        const hours = e.detail;
+        // dispatch a global CustomEvent so App can listen
+        window.dispatchEvent(new CustomEvent('galaxy_ff_internal', { detail: hours }));
+      });
+      return () => window.removeEventListener('galaxy_applyFastForward', ()=>{});
+    }, []);
+
+    return <App key={key} />;
+  }
+
+  // Now we will implement App again but slightly modify to listen for 'galaxy_ff_internal' event.
+  // For clarity and to keep single App implementation, we'll override the previous App with final version:
+
+  (function renderFinalApp(){
+    const { useState, useEffect, useRef } = React;
+
+    function FinalApp(){
+      const [galaxy, setGalaxy] = useState([]);
+      const [selected, setSelected] = useState(null);
+      const [log, setLog] = useState([]);
+      const [notif, setNotif] = useState(null);
+      const [camera, setCamera] = useState({ x: 0, y: 0, scale: 0.95 });
+      const [highlighted, setHighlighted] = useState(null);
+      const [centralAI, setCentralAI] = useState(makeCentralAI());
+
+      // load/create
+      useEffect(() => {
+        const save = localStorage.getItem("galaxy_v3_save");
+        const last = localStorage.getItem("galaxy_v3_last");
+        if (save) {
+          let g = JSON.parse(save);
+          if (last) {
+            const hours = Math.floor((now() - parseInt(last,10)) / 3600000);
+            if (hours > 0) {
+              g = evolveGalaxy(g, hours, centralAI);
+              pushLog(`${hours}h se sont écoulées pendant ton absence — évolution appliquée.`);
+              setNotif(`${hours}h appliquées`);
+            } else {
+              pushLog("Galaxie chargée depuis la sauvegarde.");
+            }
+          }
+          setGalaxy(g);
+        } else {
+          const g = createGalaxy();
+          setGalaxy(g);
+          localStorage.setItem("galaxy_v3_save", JSON.stringify(g));
+          pushLog("Nouvelle galaxie V3 générée.");
+        }
+        localStorage.setItem("galaxy_v3_last", now());
+      }, []);
+
+      // autosave
+      useEffect(() => {
+        const t = setInterval(() => {
+          localStorage.setItem("galaxy_v3_save", JSON.stringify(galaxy));
+          localStorage.setItem("galaxy_v3_last", now());
+        }, 9000);
+        return () => clearInterval(t);
+      }, [galaxy]);
+
+      // periodic event generator
+      useEffect(() => {
+        const t = setInterval(() => {
+          if (galaxy.length === 0) return;
+          // central AI intervene sometimes
+          if (Math.random() < 0.18) {
+            const updated = centralAI.intervene(galaxy, pushLog);
+            setGalaxy(updated);
+          }
+          // choose event star
+          const star = galaxy[ randint(0, galaxy.length-1) ];
+          const ev = chooseEvent(star, galaxy, centralAI);
+          const updated = galaxy.map(s => s.id === star.id ? ev.apply(s) : s);
+          setGalaxy(updated);
+          pushLog(ev.text);
+          setNotif(ev.text);
+          setHighlighted(star.id);
+          setTimeout(()=>setHighlighted(null), 3500);
+        }, 6500);
+        return () => clearInterval(t);
+      }, [galaxy, centralAI]);
+
+      // AI mood drift
+      useEffect(() => {
+        const t = setInterval(() => {
+          setCentralAI(ai => ({ ...ai, mood: clamp(ai.mood + rand(-0.06, 0.06), -1, 1) }));
+        }, 12000);
+        return () => clearInterval(t);
+      }, []);
+
+      // listen for fast-forward events
+      useEffect(() => {
+        const handler = (e) => {
+          const hours = e.detail;
+          const g = evolveGalaxy(galaxy, hours, centralAI);
+          setGalaxy(g);
+          pushLog(`Avance rapide: ${hours}h appliquées.`);
+          setNotif(`${hours}h appliquées`);
+        };
+        window.addEventListener('galaxy_ff_internal', handler);
+        return () => window.removeEventListener('galaxy_ff_internal', handler);
+      }, [galaxy, centralAI]);
+
+      // notification timeout
+      useEffect(() => {
+        if (!notif) return;
+        const t = setTimeout(()=> setNotif(null), 4200);
+        return () => clearTimeout(t);
+      }, [notif]);
+
+      function pushLog(t){
+        setLog(l => [ `${new Date().toLocaleTimeString()} — ${t}`, ...l].slice(0, 160));
+      }
+
+      function handleSelect(s){
+        setSelected(s);
+        pushLog(`Fiche ouverte: ${s.name}`);
+      }
+
+      // actions
+      const sendAid = (id) => {
+        setGalaxy(g => g.map(s => s.id === id ? { ...s, population: Math.floor(s.population*1.06), lastEvent: 'Aide reçue' } : s));
+        pushLog("Aide envoyée.");
+        setNotif("Aide envoyée");
+      };
+
+      const declareWar = (id) => {
+        setGalaxy(g => g.map(s => s.id === id ? { ...s, status:'war', lastEvent: 'Guerre déclarée' } : s));
+        pushLog("Guerre déclarée.");
+        setNotif("Guerre !");
+      };
+
+      const fosterAlliance = (idA, idB) => {
+        setGalaxy(g => g.map(s => {
+          if (s.id === idA || s.id === idB) {
+            const other = (s.id === idA ? idB : idA);
+            return { ...s, lastEvent: `Alliance ${other}`, relations: {...s.relations, [other]: 80 } };
+          }
+          return s;
+        }));
+        pushLog("Alliance formée.");
+        setNotif("Alliance");
+      };
+
+      const addSystem = () => {
+        const s = generateStar();
+        setGalaxy(g => {
+          for(const o of g) s.relations[o.id] = randint(-30, 40);
+          pushLog(`Nouvelle étoile: ${s.name}`);
+          setNotif(`Crée: ${s.name}`);
+          return [...g, s];
+        });
+      };
+
+      const resetGalaxy = () => {
+        if (!confirm("Réinitialiser la galaxie ? (Progrès local perdu)")) return;
+        const g = createGalaxy();
+        setGalaxy(g);
+        localStorage.setItem("galaxy_v3_save", JSON.stringify(g));
+        localStorage.setItem("galaxy_v3_last", now());
+        setSelected(null);
+        pushLog("Galaxie réinitialisée.");
+        setNotif("Réinitialisée");
+      };
+
+      const neighborsOf = (s, radius=360) => galaxy.filter(x => x.id !== s.id && Math.hypot(x.x - s.x, x.y - s.y) < radius).slice(0,8);
+
+      // UI
+      return (
+        <div className="w-full h-full relative select-none">
+          {/* Topbar */}
+          <div className="absolute top-3 left-3 right-3 z-60 flex justify-between items-center gap-4">
+            <div className="flex items-center gap-3">
+              <div className="text-2xl font-bold text-cyan-300">🌌 La Galaxie Vivante — V3</div>
+              <div className="text-sm text-gray-300">Simulation — IA centrale — civilisations</div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="text-xs text-gray-300 mr-2">IA mood: <span className="font-semibold">{centralAI.mood.toFixed(2)}</span></div>
+              <button onClick={()=> window.dispatchEvent(new CustomEvent('galaxy_ff_internal', { detail: 6 })) } className="px-3 py-1 bg-slate-700 rounded text-sm">+6h</button>
+              <button onClick={()=> window.dispatchEvent(new CustomEvent('galaxy_ff_internal', { detail: 24 })) } className="px-3 py-1 bg-amber-700 rounded text-sm">+24h</button>
+              <button onClick={addSystem} className="px-3 py-1 bg-green-700 rounded text-sm">Ajouter système</button>
+              <button onClick={resetGalaxy} className="px-3 py-1 bg-red-700 rounded text-sm">Reset</button>
+            </div>
+          </div>
+
+          <GalaxyMap galaxy={galaxy} onSelect={handleSelect} camera={camera} setCamera={setCamera} highlighted={highlighted} />
+
+          {/* Right info */}
+          <div className="absolute right-4 top-20 w-96 bg-black bg-opacity-60 p-3 rounded z-60">
+            <h3 className="font-bold text-cyan-200 mb-2">Fiche Système</h3>
+            {!selected && <div className="text-sm text-gray-300">Clique sur une étoile pour afficher ses détails et actions.</div>}
+            {selected && (
+              <>
+                <div className="text-lg font-semibold">{selected.name}</div>
+                <div className="text-sm text-gray-300">Population: <span className="font-medium">{selected.population.toLocaleString()}</span></div>
+                <div className="text-sm text-gray-300">Niveau civilisation: <span className="font-medium">{selected.civLevel}</span></div>
+                <div className="text-sm text-gray-300">Alignement: <span className="font-medium">{selected.alignment}</span></div>
+                <div className="text-sm text-gray-300">Énergie: <span className="font-medium">{selected.energy}</span></div>
+                <div className="text-xs text-gray-400 mt-2">{selected.lastEvent}</div>
+
+                <div className="mt-3 flex gap-2">
+                  <button onClick={()=> { sendAid(selected.id); }} className="px-2 py-1 bg-blue-600 rounded text-sm">Envoyer aide</button>
+                  <button onClick={()=> { declareWar(selected.id); }} className="px-2 py-1 bg-red-600 rounded text-sm">Déclarer guerre</button>
+                  <button onClick={()=> {
+                    const nb = neighborsOf(selected, 420);
+                    if (nb.length >= 1) fosterAlliance(selected.id, nb[0].id);
+                    else { pushLog("Aucun voisin proche pour alliance."); setNotif("Aucun voisin"); }
+                  }} className="px-2 py-1 bg-yellow-600 rounded text-sm">Forger alliance</button>
+                </div>
+
+                <div className="mt-3">
+                  <div className="text-sm font-semibold text-gray-200">Voisins proches</div>
+                  <div className="mt-2 space-y-1 text-xs">
+                    {neighborsOf(selected, 420).map(n => (
+                      <div key={n.id} className="flex justify-between items-center">
+                        <div>{n.name}</div>
+                        <div className="text-gray-300">{Math.round(Math.hypot(n.x-selected.x, n.y-selected.y))} px</div>
+                      </div>
+                    ))}
+                    {neighborsOf(selected, 420).length === 0 && <div className="text-gray-400">Aucun voisin dans le rayon.</div>}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Journal bottom-left */}
+          <div className="absolute bottom-4 left-4 z-60 w-96 bg-black bg-opacity-60 p-3 rounded journal" style={{ maxHeight:'46vh', overflowY:'auto' }}>
+            <div className="flex justify-between items-center mb-2">
+              <div className="font-semibold text-cyan-200">Journal Galactique</div>
+              <div className="text-xs text-gray-300">Événements récents</div>
+            </div>
+            <div className="text-xs text-gray-200">
+              {log.length === 0 && <div>Aucun événement pour le moment.</div>}
+              {log.map((l,i)=> <div key={i} className="mb-1">• {l}</div>)}
+            </div>
+          </div>
+
+          {/* notif */}
+          {notif && (
+            <div className="absolute top-16 right-6 z-70 notif bg-white bg-opacity-5 backdrop-blur-sm p-3 rounded text-sm">
+              {notif}
+            </div>
+          )}
+
+          {/* help */}
+          <div className="absolute bottom-4 right-4 z-60 bg-black bg-opacity-50 p-2 rounded text-xs">
+            <div>Zoom: roulette | Pan: glisser | Cliquer: fiche</div>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.render(<FinalApp />, document.getElementById('root'));
+  })();
+
+  </script>
+</body>
+</html>
