@@ -274,3 +274,210 @@
           </div>
         );
       }
+            /* ==========================
+         Carte galactique
+      =========================== */
+      function generateGalaxy(seed = 42, starCount = 50) {
+        const stars = [];
+        for (let i = 0; i < starCount; i++) {
+          stars.push({
+            id: i,
+            x: Math.random() * 1000,
+            y: Math.random() * 800,
+            name: "Système " + (i + 1),
+            owner: null,
+            planets: Math.floor(Math.random() * 5) + 1,
+          });
+        }
+        return stars;
+      }
+
+      /* ==========================
+         Composant HUD
+      =========================== */
+      function HUD({ resources }) {
+        return (
+          <div className="hud">
+            <div>⛏️ Minerai : {Math.floor(resources.minerai)}</div>
+            <div>⚡ Énergie : {Math.floor(resources.energie)}</div>
+            <div>💎 Cristal : {Math.floor(resources.cristal)}</div>
+            <div>🧪 Science : {Math.floor(resources.science)}</div>
+          </div>
+        );
+      }
+
+      /* ==========================
+         Panneau de gestion planétaire
+      =========================== */
+      function PlanetPanel({ selectedStar, buildings, onBuild, resources }) {
+        if (!selectedStar) return null;
+
+        return (
+          <div className="panel fade-in">
+            <h3>{selectedStar.name}</h3>
+            <p>Planètes : {selectedStar.planets}</p>
+
+            {Object.entries(BASE_BUILDINGS).map(([key, b]) => {
+              const count = buildings[key] || 0;
+              const cost = b.baseCost * Math.pow(1.5, count);
+              const canAfford = resources.minerai >= cost;
+              return (
+                <div key={key}>
+                  <strong>{b.name}</strong> (x{count})<br />
+                  <small>{b.desc}</small>
+                  <div>
+                    <button
+                      className={
+                        canAfford ? "upgrade-btn enabled-btn" : "upgrade-btn disabled-btn"
+                      }
+                      disabled={!canAfford}
+                      onClick={() => onBuild(key, cost)}
+                    >
+                      {canAfford ? "Construire" : "Trop cher"} ({Math.floor(cost)} M)
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      }
+
+      /* ==========================
+         Composant Carte Galactique
+      =========================== */
+      function GalaxyMap({ stars, onSelectStar }) {
+        return (
+          <svg
+            className="galaxy-map"
+            viewBox="0 0 1000 800"
+            onClick={(e) => {
+              if (e.target.tagName === "circle") return;
+              onSelectStar(null);
+            }}
+          >
+            {stars.map((s) => (
+              <circle
+                key={s.id}
+                cx={s.x}
+                cy={s.y}
+                r="3"
+                fill={s.owner ? "#00aaff" : "#ffffff"}
+                onClick={() => onSelectStar(s)}
+              />
+            ))}
+          </svg>
+        );
+      }
+
+      /* ==========================
+         Composant principal Game
+      =========================== */
+      function Game({ player }) {
+        const [stars, setStars] = React.useState(generateGalaxy());
+        const [selectedStar, setSelectedStar] = React.useState(null);
+        const [resources, setResources] = React.useState({
+          minerai: 200,
+          energie: 100,
+          cristal: 50,
+          science: 0,
+        });
+        const [buildings, setBuildings] = React.useState({
+          mine: 0,
+          power: 0,
+          extractor: 0,
+          lab: 0,
+        });
+        const [events, setEvents] = React.useState([]);
+
+        // Production automatique
+        React.useEffect(() => {
+          const timer = setInterval(() => {
+            setResources((r) => {
+              const prod = {
+                minerai: buildings.mine * BASE_BUILDINGS.mine.baseProd,
+                energie: buildings.power * BASE_BUILDINGS.power.baseProd,
+                cristal: buildings.extractor * BASE_BUILDINGS.extractor.baseProd,
+                science: buildings.lab * BASE_BUILDINGS.lab.baseProd,
+              };
+              return {
+                minerai: r.minerai + prod.minerai * 0.5,
+                energie: r.energie + prod.energie * 0.5,
+                cristal: r.cristal + prod.cristal * 0.5,
+                science: r.science + prod.science * 0.5,
+              };
+            });
+          }, 1000);
+          return () => clearInterval(timer);
+        }, [buildings]);
+
+        // Gestion construction
+        const handleBuild = (type, cost) => {
+          setResources((r) => ({ ...r, minerai: r.minerai - cost }));
+          setBuildings((b) => ({
+            ...b,
+            [type]: b[type] + 1,
+          }));
+          pushEvent("Nouvelle construction : " + BASE_BUILDINGS[type].name);
+        };
+
+        // Gestion événements
+        const pushEvent = (msg) => {
+          setEvents((ev) => [...ev.slice(-3), { id: Date.now(), msg }]);
+        };
+
+        // Sauvegarde locale
+        React.useEffect(() => {
+          const save = { resources, buildings };
+          localStorage.setItem("playerState", JSON.stringify(save));
+        }, [resources, buildings]);
+
+        return (
+          <>
+            <HUD resources={resources} />
+            <PlanetPanel
+              selectedStar={selectedStar}
+              buildings={buildings}
+              resources={resources}
+              onBuild={handleBuild}
+            />
+            <GalaxyMap stars={stars} onSelectStar={setSelectedStar} />
+
+            {events.map((e) => (
+              <div key={e.id} className="event-box">
+                {e.msg}
+              </div>
+            ))}
+          </>
+        );
+      }
+
+      /* ==========================
+         Application principale
+      =========================== */
+      function App() {
+        const [started, setStarted] = React.useState(false);
+        const [player, setPlayer] = React.useState(null);
+
+        const handleStart = (playerData) => {
+          setPlayer(playerData);
+          setStarted(true);
+        };
+
+        return (
+          <>
+            {!started && <TitleScreen onStart={handleStart} />}
+            {started && <Game player={player} />}
+          </>
+        );
+      }
+
+      /* ==========================
+         Lancement
+      =========================== */
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<App />);
+    </script>
+  </body>
+</html>
+
